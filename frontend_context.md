@@ -1,0 +1,218 @@
+# frontend_context.md — Contexto de desarrollo del Frontend GastronomIA
+
+> **Propósito:** este archivo unifica todas las decisiones documentadas del proyecto relevantes para desarrollar el frontend. Va junto a los archivos del prototipo (`*.jsx`, `*.css`, `*.html`) estan en la carpeta gastronomia-v2para que al iniciar el proyecto Nuxt se tenga el contexto completo: este MD = las decisiones; los JSX = la referencia visual/funcional.
+
+## 1. Qué es el producto
+
+**GastronomIA** — SaaS multi-tenant de control de rentabilidad con IA para restaurantes PyME de Lima. Caso de estudio: **Motif Restobar Karaoke** (San Juan de Lurigancho). Tesis UPC Ingeniería de Software, TP1 (2026-1) + TP2 (2026-2).
+
+**3 pilares funcionales:**
+1. **Forecasting de demanda** (Chronos-2 primary, Prophet fallback) — el frontend grafica predicciones con bandas P10/P90.
+2. **Chat analítico Text-to-SQL** (Claude + RAG) — el frontend consume streaming SSE.
+3. **Gestión BOM y costeo dinámico por plato** — CRUD de recetas, ingredientes, márgenes.
+
+**Usuarios (personas):**
+
+| Persona | Rol app | Qué usa |
+|---|---|---|
+| María Quispe (dueña) | `owner` | Dashboard KPIs, chat analítico, forecast, reportes, settings |
+| Carlos Salazar (gerente) | `manager` | Dashboards, reportes, chat; settings solo lectura |
+| Meseros/cocineros/cajeros | `staff` | POS, KDS, inventario (lectura), interfaz simplificada |
+
+---
+
+## 2. Stack frontend (DECIDIDO — no reevaluar)
+
+| Capa | Tecnología | Notas |
+|---|---|---|
+| Framework | **Nuxt 3.16+** SSR híbrido | Landing SSR; `/app/**` como SPA island; Nitro como BFF |
+| Base | Vue 3.5+ Composition API | `<script setup>` siempre |
+| Tipado | TypeScript **estricto** | **PROHIBIDO `any`** (evidencia ABET SO7) |
+| Estilos | Tailwind CSS v4 + **Nuxt UI** | Dashboard template oficial; theme con variables CSS |
+| Gráficos | **vue-echarts** (Apache ECharts) | Forecast con bandas P10/P90, heatmaps, drill-down |
+| Tablas | TanStack Table v8 (Vue) | Headless |
+| Formularios | VeeValidate + **Zod v4** | Mismos schemas Zod que el backend (`packages/shared`) |
+| Estado cliente | Pinia | Sesión, filtros de UI |
+| Estado servidor | @pinia/colada | Data fetching/cache (rol de TanStack Query) |
+| Auth | nuxt-auth-utils + Better-Auth | Ver §4 |
+| Iconos | @nuxt/icon (Iconify) | Incluido con Nuxt UI |
+| E2E | Playwright | Unit: Vitest |
+
+**Deploy frontend:** Vercel. Backend NestJS 11 + Fastify (monolito modular) y servicios FastAPI (IA) en Hetzner con Coolify. BD: PostgreSQL 17 + pgvector (TimescaleDB **retirado** por ADR-007).
+
+---
+
+## 3. El prototipo (estos JSX) — qué es y qué NO es
+
+- **46 pantallas en React 18** con CSS propio, deploy en https://gastronomia-prototipo.vercel.app/
+- Es **proof-of-concept / referencia visual y de flujos**. El frontend real se escribe desde cero en Nuxt. **No portar el código React**; portar el diseño, los flujos y los textos.
+- `screenshots/` contiene capturas de cada pantalla; `_capture-script`, `design-canvas.jsx`, `ios-frame.jsx`, `tweaks-panel.jsx` son herramientas del prototipo, no pantallas.
+
+### Mapa de pantallas → archivos
+
+| Módulo | Pantallas (archivos .jsx/.html) |
+|---|---|
+| Onboarding/Auth | `splash` (Splash Welcome), `onboarding` (Steps 1-5 + Done), `login`, `verify`, `forgot` (Forgot Password), `Success`, `restaurant`, `setup`, `done` |
+| Dashboard | `Home` (overview KPIs), `Notifications`, `Profile`, `Help` |
+| POS / Salón | `Pos`, `Menu`, `MesaDetail`, `MesaActionsSheet`, `OpenTableSheet`, `SplitBill`, `CobrarSheet` (cobros), `AdjustPrice`, `DiscountSheet` |
+| Recetas / Catálogo | `Recipes`, `RecipeDetail`, `RecipeNew` + `RecipeNew2` + `RecipeNew3` (wizard 3 pasos), `ProductDetail`, `CatalogSheet` |
+| Inventario | `Stock`, `MovimientoRapido`, `ShoppingList` |
+| Ventas / Comprobantes | `Invoices`, `InvoiceDetail` |
+| Chat analítico (IA) | `Chat` |
+| Datos | `DataImport`, `DataExport`, `MagicUpload`, `import` |
+| Settings | `SettingsBusiness`, `SettingsHours`, `SettingsMenu`, `SettingsPayments`, `SettingsTables`, `SettingsTax` |
+
+---
+
+## 4. Sistema de diseño (definido en `colors_and_type.css` — ÚSALO)
+
+La identidad visual **ya está decidida**: "paleta cálida bistró: terracota, crema, espresso". Al montar Nuxt UI/Tailwind v4, mapear estos tokens al theme:
+
+**Colores de marca:**
+
+| Token | Valor | Uso |
+|---|---|---|
+| `--terracotta` | `#C96A43` | Acento principal (700: `#A8542F`, 300: `#E29A7E`, 100: `#F5DACE`) |
+| `--espresso` | `#1A1A1A` | Texto y elementos primarios (800/600/400: `#2B2A28`/`#4A4744`/`#807B75`) |
+| `--crema` | `#F3EDE4` | Fondo principal (200/100/50: `#EAE2D5`/`#F8F4ED`/`#FBF8F2`) |
+| `--mostaza` | `#D8A441` | Secundario / warning (700: `#B0822E`, 100: `#F1DDB0`) |
+| `--oliva` | `#6E7B61` | Secundario / success (700: `#525E47`, 100: `#D6DCCC`) |
+| `--danger` | `#B33A2A` | Error (bg: `#F5D9D2`) |
+| `--info` | `#4A6B7B` | Info (bg: `#D8E2E7`) |
+
+**Tipografía:** `DM Sans` (sans, UI y headings), `Lora` *italic* (serif, display/editorial), `JetBrains Mono` (código/SQL en el chat). Escala base 15px (`--fs-base`), display 64px. TTFs en `fonts/`.
+
+**Otros tokens:** spacing escala 4px (`--space-1..20`), radios 8px default / 12px cards (`--radius*`), sombras sutiles planas, focus ring terracota `rgba(201,106,67,0.28)`, motion `--dur` 200ms con `cubic-bezier(0.2,0,0.1,1)`.
+
+---
+
+## 5. Autenticación y multi-tenancy (CRÍTICO)
+
+- JWT **RS256** (access 15 min, refresh 7 d) en **cookie httpOnly sellada** (iron-webcrypto). **El JWT nunca toca JavaScript.**
+- El **BFF de Nitro** (server routes de Nuxt) inyecta `Authorization: Bearer` hacia la API NestJS. El cliente nunca llama a NestJS directo.
+- Claims: `{ sub, tenant_id, roles: [owner|manager|staff] }`.
+- **`tenant_id` SIEMPRE sale del JWT** — nunca del path, query ni body. La BD tiene RLS FORCE como segunda capa, pero el frontend/BFF también filtra.
+- Roles → gating de UI: `owner` todo; `manager` sin escritura en settings; `staff` solo POS/KDS/inventario lectura.
+- Better-Auth (plugin organization) maneja orgs/invitaciones; CASL en backend.
+
+---
+
+## 6. Integración con la API
+
+- **REST + SSE** (GraphQL descartado). Prefijos de endpoints:
+  `/api/auth/`, `/api/tenants/`, `/api/recipes/`, `/api/inventory/`, `/api/sales/`, `/api/forecasts/`, `/api/nl-query/stream`, `/api/reports/`.
+- **Formato de respuesta** (schemas Zod compartidos en `packages/shared`):
+
+```ts
+ApiResponse<T> {
+  success: boolean
+  data: T
+  error?: { code: string; message: string }
+  meta?: { totalCount: number; page: number }
+}
+```
+
+- **Chat analítico:** `EventSource` sobre `/api/nl-query/stream` — renderizado incremental: SQL generado → tabla de resultados → respuesta humanizada (Groq streaming).
+- **Carga de CSV (TumiSoft):** upload multipart → pre-signed URL R2 → worker BullMQ valida fila a fila → progreso por SSE → UI muestra barra + errores por fila.
+- **Forecast:** lectura de `/api/forecasts/` → chart ECharts con línea `yhat` y banda `yhat_lo`–`yhat_hi` (P10/P90).
+
+---
+
+## 7. Entidades que consume el frontend (resumen del modelo)
+
+- **IAM:** `tenants`, `users`, `organizations`, `invitations` (roles owner/manager/staff).
+- **Catálogo:** `ingredients` (+ `ingredient_price_history`), `recipes` (kind: `dish|sub_recipe`, `yield`, `sell_price`), `recipe_items` (ingrediente o sub-receta, `qty`, `waste_pct`), `units_of_measure` + conversiones.
+- **Operación:** `sales` / `sale_items` (descuentos), `purchases` / `purchase_items`.
+- **Inventario:** `inventory_movements` (source: purchase|sale|waste|adjustment|count_recon), `inventory_counts` + `inventory_count_lines` (varianza física vs sistema).
+- **IA:** `forecasts` (yhat, yhat_lo, yhat_hi, target_date), `chat_conversations` / `chat_messages` (con SQL ejecutado), `weekly_reports` (markdown narrativo).
+- **Ingesta:** `ingestions` (status queued|processing|success|error) + `ingestion_errors` (fila, campo, mensaje).
+
+Convención BD: snake_case, `tenant_id NOT NULL`, soft delete (`deleted_at`), moneda **solo S/ (PEN)**, timezone **America/Lima**.
+
+---
+
+## 8. Alcance: épicas y prioridad (Product Backlog: 102 HU / 427 SP)
+
+| Épica | Nombre | Sprint | Prioridad | Carga frontend |
+|---|---|---|---|---|
+| E01 | Identity, Multi-Tenancy, Seguridad | S1 | MUST | Login, signup, invitaciones, settings |
+| E02 | Catálogo, Recetas y Menú | S1 | MUST | CRUD recetas + wizard, costeo visible |
+| E03 | POS, Salón y Cocina (KDS) | S2 | MUST | **Frontend-intensivo**: POS, mesas, KDS |
+| E04 | Tickets, Cobros y Pagos | S2 | MUST | Cobro, split bill, descuentos |
+| E05 | Inventario, Compras y Mermas | S3 | MUST | Stock, conteos, varianzas |
+| E06 | Costeo Dinámico y Márgenes | S3 | MUST | Vistas de margen por plato |
+| E07 | Reportes, Dashboards y KPIs | S4 | SHOULD | **Frontend-intensivo**: overview, charts |
+| E08 | Forecasting con IA | S4 | MUST | Vista forecast (ECharts) |
+| E09 | Chat Analítico Text-to-SQL | S5 | MUST | **Frontend-intensivo**: chat SSE |
+| E10 | Notificaciones y Alertas | S4 | SHOULD | Centro de notificaciones |
+| E11 | Migración desde ERPs Legacy | S1 | SHOULD | Upload CSV + progreso |
+| E12 | Plataforma, DevOps | S0 | MUST | Skeleton, CI |
+
+**Fuera de alcance TP1 (NO construir):** CRM, reservas de mesas, turnos de personal, PWA offline, multi-sucursal, delivery, app nativa, facturación SUNAT, multi-moneda.
+
+---
+
+## 9. Requisitos UX y métricas de éxito (la tesis se mide con esto)
+
+| Requisito | Valor |
+|---|---|
+| Usabilidad | **SUS ≥ 70** en piloto con usuarios reales de Motif |
+| Latencia chat | **P95 < 2 s** (round-trip completo) |
+| Bundle | **< 100 KB gzip** (vigilar imports de ECharts: usar tree-shaking) |
+| Accesibilidad | **WCAG 2.1 AA** (verificar con axe devtools) |
+| Responsive | **Mobile-first** — el restaurante opera con smartphones y WiFi inestable |
+| Offline | Solo *awareness* (banner "sin conexión"); PWA queda para TP2 |
+| Idioma | **Solo español peruano (es-PE)** en TP1; estructura i18n preparada para TP2 |
+
+---
+
+## 10. Convenciones de código y metodología
+
+- **SDD — Spec-Driven Development (ADR-006):** spec primero en `/specs/eXX/HU-XX-YY-titulo.spec.md` → test rojo (Vitest) → implementación mínima → review. **No se mergea código sin spec.**
+- **Branches:** `feat/HU-XX-YY-titulo` · **Commits:** `spec(HU-XX-YY): descripción`.
+- **Naming TS:** camelCase variables/funciones, PascalCase tipos/componentes, **kebab-case archivos**. Código en inglés, docs en español.
+- **Prohibido:** `any`, `console.log` (usar logger), catch silencioso, magic strings/numbers, credenciales hardcodeadas, `tenant_id` desde path/body.
+- Zod como **única fuente de verdad de tipos** (inferir TS desde schemas compartidos).
+
+---
+
+## 11. Estado actual (2026-06-10) y decisiones de implementación
+
+**Skeleton Sprint 0 COMPLETADO (2026-06-10).** Lo construido:
+
+- **Theme** (`app/assets/css/main.css`): tokens de §4 mapeados a Tailwind v4 `@theme` (escalas 50–950: `terracotta`, `oliva`, `mostaza`, `ladrillo`=danger, `lago`=info, `espresso`=neutro cálido) + tokens `--ui-*` de Nuxt UI + tokens crudos del prototipo en `:root` para portar pantallas 1:1. Fuentes DM Sans/Lora variables locales (`app/assets/fonts/`); JetBrains Mono pendiente (se añade con E09).
+- **Shell** (`app/layouts/app.vue`): bottom-nav móvil con safe-areas iOS (`components/nav/MobileTabBar.vue`) + sidebar desktop ≥1024px (`components/nav/DesktopSidebar.vue`); destinos en `composables/use-app-nav.ts`.
+- **Pantallas:** landing SSR (`/`), login + forgot (portados del prototipo), Home completo (`/app` — KPIs, alertas IA, atajos, tip), menú "Más" (`/app/menu`), catch-all "en construcción" (`/app/[...slug]`) con mapa de épicas.
+- **Auth scaffold:** `nuxt-auth-utils` (cookie sellada, sesión server-side) + middleware global que protege `/app/**` + endpoints mock `server/api/auth/{login,logout}.post.ts` con usuarios demo Motif (password en `NUXT_DEMO_PASSWORD`, `.env`). Se reemplaza por Better-Auth/NestJS en Sprint 1 manteniendo el contrato.
+- **PWA:** `@vite-pwa/nuxt` con manifest GastronomIA (íconos generados desde `logo-symbol.svg`, theme crema, es-PE, standalone). SW desactivado en dev (`devOptions.enabled: false`); offline real queda para TP2.
+- **Schemas compartidos:** `shared/schemas/auth.ts` (Zod) + `shared/types/api.ts` (`ApiResponse<T>`) — semilla de lo que migrará a `packages/shared` en el monorepo.
+
+**Desviaciones registradas respecto a §2** (decididas al implementar):
+
+| Tema | Doc decía | Implementado | Motivo |
+|---|---|---|---|
+| Nuxt | 3.16+ | **Nuxt 4.3** (estructura `app/`, carpeta `shared/`) | Versión actual estable; mismo modelo SSR/Nitro |
+| Package manager | (bun.lock huérfano) | **npm** (Node 22) | bun no está instalado en la máquina de desarrollo |
+| Formularios | VeeValidate + Zod | **UForm de Nuxt UI + Zod** | UForm valida con los mismos schemas Zod; una dependencia menos. Reevaluar si un wizard complejo (E02) lo exige |
+| vue-echarts / TanStack Table | en stack base | **aún no instalados** | Se agregan en E07/E08 y E02 respectivamente, para cuidar el budget de bundle (<100 KB) |
+
+- OE1 (SRS) y OE2 (arquitectura C4 + ADRs + 46 pantallas) ya tienen actas firmadas. OE3 (software desplegado) tiene demo esperada la semana 12 (2026-06-23).
+
+## 11b. TODAS las pantallas portadas con fake API (2026-06-11)
+
+**Decisión:** en lugar de seguir el orden del backlog, se portaron TODAS las pantallas del prototipo de una vez, con datos mock servidos por una **fake API en el BFF de Nitro** (`server/api/**` + `server/utils/mock-db.ts`). El contrato (rutas REST §6, `ApiResponse<T>`, SSE) es el mismo que expondrá NestJS: al integrar el backend real solo se reemplazan los handlers de Nitro por proxies — el cliente no cambia.
+
+**Capa de datos:**
+- `shared/types/domain.ts` — entidades de §7 tipadas (Recipe, DiningTable, Order, Sale, Ingredient, movimientos, settings, chat, ingestions).
+- Mock DB en memoria con seeds realistas de Motif (sobrevive HMR; consistente con las alertas del Home: Limón Sutil crítico, ceviche 18 %, 14/20 mesas).
+- Endpoints CRUD por dominio + **SSE real**: `/api/nl-query/stream` (chat guionado: SQL → tabla → respuesta por chunks) y `/api/ingestions/:id/events` (progreso de import con errores por fila). `/api/magic-upload` simula OCR de facturas.
+- Composables @pinia/colada por dominio (`use-recipes`, `use-tables`, `use-inventory`, `use-sales`, `use-notifications`, `use-app-settings`, `use-chat`) con invalidación de caché.
+- Primitivas UI: `UiBottomSheet` (port de sheet-styles), `UiScreenHeader`, `UiEmptyState` + clases globales del prototipo en `components.css`.
+
+**Pantallas (~42 rutas):** onboarding completo (/welcome + 5 pasos + done, registro mock), POS completo (mapa de mesas con estados, detalle de mesa con comanda, catálogo, abrir mesa, descuento, ajustar precio, cobrar con QR mock que emite comprobante real, dividir cuenta por persona/items), Recetas (lista, detalle con BOM, wizard 3 pasos con margen en vivo), Stock (hub, movimiento rápido, historial, lista de compras que registra compras), Comprobantes (lista + ticket), Chat SSE, Notificaciones, Perfil, Ayuda, Datos (import con progreso SSE, export CSV real, magic upload), Settings (hub + 6 secciones con gating por rol).
+
+**Tests visuales:** `npm run test:visual` (`scripts/visual-shots.mjs`) recorre todas las rutas con sesión demo en viewport iPhone + desktop y guarda capturas en `tests/visual/shots/` — esa carpeta es la "suite" de regresión visual del TP1. Typecheck estricto y build de producción pasan.
+
+**Adaptación registrada:** `Invoices.jsx` del prototipo es historial de facturas de PROVEEDOR; se adaptó a comprobantes de VENTA emitidos (los genera el cobro del POS), que es lo que el dominio §7 modela. Las compras a proveedor viven en Magic Upload + movimientos de inventario.
+
+- **Siguiente paso:** integrar API NestJS real (reemplazar handlers mock del BFF), Better-Auth, y E07/E08 (reportes + forecast con vue-echarts — únicas pantallas sin prototipo).

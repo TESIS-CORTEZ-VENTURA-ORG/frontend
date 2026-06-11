@@ -1,0 +1,14 @@
+node_modules
+.nuxt
+.output
+.nitro
+.cache
+.data
+dist
+.git
+.env
+.env.*
+gastronomia-v2
+tests/visual/shots
+*.log
+.DS_Store

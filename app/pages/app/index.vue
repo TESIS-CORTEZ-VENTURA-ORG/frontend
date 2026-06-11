@@ -1,0 +1,580 @@
+<script setup lang="ts">
+definePageMeta({ layout: 'app' })
+useSeoMeta({ title: 'Inicio — GastronomIA' })
+
+const { user } = useUserSession()
+const toast = useToast()
+const { data: notifications } = useNotifications()
+const unreadCount = computed(() => (notifications.value ?? []).filter(n => !n.read).length)
+
+const firstName = computed(() => user.value?.name.split(' ')[0] ?? '')
+
+const dateLabel = computed(() => {
+  const label = new Intl.DateTimeFormat('es-PE', {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+    timeZone: 'America/Lima',
+  }).format(new Date())
+  return label.charAt(0).toUpperCase() + label.slice(1)
+})
+
+// Datos mock hasta tener la API (E07 reportes / E08 forecast)
+const sparkBars = [0.4, 0.55, 0.42, 0.7, 0.6, 0.85, 1]
+const occupancy = { active: 14, total: 20, pct: 70 }
+
+const ringSize = 36
+const ringRadius = (ringSize - 6) / 2
+const ringCircumference = 2 * Math.PI * ringRadius
+const ringOffset = computed(() => ringCircumference * (1 - occupancy.pct / 100))
+
+interface Shortcut {
+  icon: string
+  label: string
+  sub: string
+  to: string
+  featured?: boolean
+}
+
+const shortcuts: Shortcut[] = [
+  { icon: 'i-lucide-utensils', label: 'Recetas', sub: 'Costos y márgenes', to: '/app/recipes' },
+  { icon: 'i-lucide-scan-line', label: 'Escanear factura', sub: 'Magic Upload', to: '/app/data/magic-upload', featured: true },
+  { icon: 'i-lucide-shopping-cart', label: 'Compras', sub: 'S/ 380 hoy', to: '/app/stock/shopping-list' },
+  { icon: 'i-lucide-bar-chart-3', label: 'Reportes', sub: 'Semana al día', to: '/app/reports' },
+]
+
+function notify(message: string): void {
+  toast.add({ title: message, icon: 'i-lucide-sparkles' })
+}
+</script>
+
+<template>
+  <div class="home">
+    <!-- ============ Header ============ -->
+    <header class="hdr">
+      <div class="hdr-left">
+        <h1 class="hdr-greet">Hola, <em>{{ firstName }}</em></h1>
+        <div class="hdr-meta">
+          <span>{{ dateLabel }}</span>
+          <span aria-hidden="true">·</span>
+          <span class="hdr-status">
+            <span class="dot-pulse" aria-hidden="true" />
+            Abierto
+          </span>
+        </div>
+      </div>
+      <div class="hdr-actions">
+        <NuxtLink to="/app/notifications" class="icon-btn" :aria-label="`Notificaciones, ${unreadCount} sin leer`">
+          <UIcon name="i-lucide-bell" />
+          <span v-if="unreadCount > 0" class="badge" aria-hidden="true">{{ unreadCount }}</span>
+        </NuxtLink>
+        <NuxtLink to="/app/menu" class="icon-btn" aria-label="Configuración">
+          <UIcon name="i-lucide-settings" />
+        </NuxtLink>
+      </div>
+    </header>
+
+    <!-- ============ KPIs ============ -->
+    <section class="section" aria-label="Indicadores de hoy">
+      <div class="section-eyebrow">Hoy</div>
+      <div class="kpi-rail" role="list">
+        <NuxtLink
+          role="listitem"
+          class="kpi-card accent"
+          to="/app/reports"
+          aria-label="Venta hoy: 2,450 soles, 12% más que ayer"
+        >
+          <div class="kpi-row-head">
+            <div class="kpi-eyebrow">Venta hoy</div>
+            <UIcon name="i-lucide-trending-up" class="size-3.5 text-(--mostaza-100)" />
+          </div>
+          <div class="kpi-value"><span class="currency">S/</span>2,450</div>
+          <div class="kpi-mini" aria-hidden="true">
+            <span
+              v-for="(h, i) in sparkBars"
+              :key="i"
+              :class="{ on: i === sparkBars.length - 1 }"
+              :style="{ height: `${h * 100}%`, alignSelf: 'flex-end' }"
+            />
+          </div>
+          <div class="kpi-trend">
+            <UIcon name="i-lucide-arrow-up-right" /> +12 % vs ayer
+          </div>
+        </NuxtLink>
+
+        <NuxtLink
+          role="listitem"
+          class="kpi-card"
+          to="/app/pos"
+          :aria-label="`Mesas activas: ${occupancy.active} de ${occupancy.total}, ${occupancy.pct} por ciento de ocupación`"
+        >
+          <div class="kpi-row-head">
+            <div class="kpi-eyebrow">Mesas activas</div>
+            <svg class="kpi-ring" :width="ringSize" :height="ringSize" :viewBox="`0 0 ${ringSize} ${ringSize}`">
+              <circle :cx="ringSize / 2" :cy="ringSize / 2" :r="ringRadius" stroke="var(--crema-200)" stroke-width="4" fill="none" />
+              <circle
+                :cx="ringSize / 2" :cy="ringSize / 2" :r="ringRadius"
+                stroke="var(--terracotta)" stroke-width="4" fill="none"
+                :stroke-dasharray="ringCircumference" :stroke-dashoffset="ringOffset"
+                stroke-linecap="round"
+                :transform="`rotate(-90 ${ringSize / 2} ${ringSize / 2})`"
+              />
+            </svg>
+          </div>
+          <div class="kpi-value">{{ occupancy.active }}<span class="kpi-value-dim">/{{ occupancy.total }}</span></div>
+          <div class="kpi-trend warm">
+            <UIcon name="i-lucide-users" /> {{ occupancy.pct }} % ocupación
+          </div>
+          <div class="kpi-meta">2 mesas con cuenta lista</div>
+        </NuxtLink>
+
+        <NuxtLink
+          role="listitem"
+          class="kpi-card"
+          to="/app/recipes"
+          aria-label="Margen promedio: 62 por ciento"
+        >
+          <div class="kpi-row-head">
+            <div class="kpi-eyebrow">Margen promedio</div>
+            <UIcon name="i-lucide-percent" class="size-3.5 text-(--terracotta)" />
+          </div>
+          <div class="kpi-value kpi-value-accent">62 %</div>
+          <div class="kpi-trend accent">
+            <UIcon name="i-lucide-arrow-up-right" /> Alto rendimiento
+          </div>
+          <div class="kpi-meta">Top 25 % de tu rubro</div>
+        </NuxtLink>
+      </div>
+    </section>
+
+    <!-- ============ Alertas IA ============ -->
+    <section class="section" aria-label="Alertas GastronomIA">
+      <div class="section-head">
+        <div class="ico" aria-hidden="true"><UIcon name="i-lucide-bot" /></div>
+        <div>
+          <div class="section-title">Alertas GastronomIA</div>
+          <div class="section-sub">Análisis IA en tiempo real · hace 4 min</div>
+        </div>
+      </div>
+
+      <div class="alerts-wrap">
+        <article class="alert critical">
+          <div class="alert-ico" aria-hidden="true"><UIcon name="i-lucide-alert-triangle" /></div>
+          <div class="alert-body">
+            <span class="alert-tagline">
+              <UIcon name="i-lucide-alert-circle" class="size-3" /> Margen en riesgo
+            </span>
+            <h3 class="alert-title">Ceviche Clásico</h3>
+            <p class="alert-text">
+              <b>Limón Sutil</b> subió <span class="highlight">30 %</span> esta semana.
+              El margen del plato bajó.
+            </p>
+            <div class="delta-chip" aria-label="Margen bajó de 26 por ciento a 18 por ciento">
+              <span class="from">26 %</span>
+              <UIcon name="i-lucide-arrow-right" />
+              <span class="to">18 %</span>
+            </div>
+            <div class="alert-actions">
+              <button class="btn btn-primary" @click="notify('Ajuste de precio — Sprint 2 (E04)')">
+                <UIcon name="i-lucide-tag" /> Ajustar precio
+              </button>
+              <NuxtLink class="btn btn-ghost" to="/app/recipes/rec-ceviche-clasico">
+                Ver detalles
+              </NuxtLink>
+            </div>
+          </div>
+        </article>
+
+        <article class="alert warn">
+          <div class="alert-ico" aria-hidden="true"><UIcon name="i-lucide-shopping-cart" /></div>
+          <div class="alert-body">
+            <span class="alert-tagline">
+              <UIcon name="i-lucide-package" class="size-3" /> Stock crítico
+            </span>
+            <h3 class="alert-title">3 insumos por debajo del umbral</h3>
+            <div class="stock-pills">
+              <span class="stock-pill">Limón Sutil <span class="qty">2.5 kg</span></span>
+              <span class="stock-pill">Aceite Oliva <span class="qty">2 L</span></span>
+              <span class="stock-pill">Cilantro <span class="qty">200 g</span></span>
+            </div>
+            <div class="alert-actions">
+              <NuxtLink class="btn btn-dark" to="/app/stock/shopping-list">
+                <UIcon name="i-lucide-list-checks" /> Ver lista de compra
+              </NuxtLink>
+            </div>
+          </div>
+        </article>
+
+        <article class="alert opp">
+          <div class="alert-ico" aria-hidden="true"><UIcon name="i-lucide-lightbulb" /></div>
+          <div class="alert-body">
+            <span class="alert-tagline">
+              <UIcon name="i-lucide-trending-up" class="size-3" /> Recomendación IA
+            </span>
+            <h3 class="alert-title">Bebidas del día</h3>
+            <p class="alert-text">
+              Detecté <b>3 cocteles</b> con margen <b>≥ 65 %</b> y stock alto. Activarlos hoy
+              puede sumar <span class="highlight">~ S/ 280</span>.
+            </p>
+            <div class="alert-actions">
+              <button class="btn btn-primary" @click="notify('Promoción «Bebidas del día» activada')">
+                <UIcon name="i-lucide-zap" /> Activar promoción
+              </button>
+            </div>
+          </div>
+        </article>
+      </div>
+    </section>
+
+    <!-- ============ Atajos ============ -->
+    <section class="section" aria-label="Atajos rápidos">
+      <div class="section-eyebrow">Atajos</div>
+      <div class="short-grid">
+        <NuxtLink
+          v-for="item in shortcuts"
+          :key="item.label"
+          :to="item.to"
+          class="short"
+          :class="{ featured: item.featured }"
+          :aria-label="`${item.label}. ${item.sub}`"
+        >
+          <span class="short-ico" aria-hidden="true"><UIcon :name="item.icon" /></span>
+          <span class="short-arrow" aria-hidden="true"><UIcon name="i-lucide-arrow-up-right" /></span>
+          <span class="short-label">{{ item.label }}</span>
+          <span class="short-sub">{{ item.sub }}</span>
+        </NuxtLink>
+      </div>
+    </section>
+
+    <!-- ============ Tip IA ============ -->
+    <section class="section" aria-label="Acción sugerida por IA">
+      <div class="section-eyebrow">Acción sugerida</div>
+      <div class="tip">
+        <div class="tip-ico" aria-hidden="true"><UIcon name="i-lucide-lightbulb" /></div>
+        <div class="tip-body">
+          <span class="tip-eyebrow">Insight IA · merchandising</span>
+          Coloca un cartel en mesas destacando <b>«Bebidas del día»</b>. Detecté que mesas
+          similares piden <b>40 % más cocteles</b> cuando hay promo visible.
+        </div>
+      </div>
+    </section>
+  </div>
+</template>
+
+<style scoped>
+.home {
+  max-width: 760px;
+  margin: 0 auto;
+  padding-top: calc(12px + env(safe-area-inset-top, 0px));
+}
+@media (min-width: 1024px) {
+  .home { padding-top: 32px; }
+}
+
+/* ============ Header ============ */
+.hdr {
+  padding: 8px 20px 16px;
+  display: flex; align-items: flex-start; justify-content: space-between; gap: 12px;
+}
+.hdr-greet {
+  font-size: 28px; font-weight: 600;
+  letter-spacing: -0.02em; line-height: 1.1;
+  color: var(--fg1); margin: 0;
+}
+.hdr-greet em {
+  font-family: var(--font-serif);
+  font-style: italic; font-weight: 500;
+  color: var(--terracotta-700);
+}
+.hdr-meta {
+  display: flex; align-items: center; gap: 10px;
+  margin-top: 6px;
+  font-size: 13px; color: var(--fg2);
+}
+.hdr-status {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-weight: 500; color: var(--oliva-700);
+}
+.dot-pulse {
+  width: 8px; height: 8px; border-radius: 50%;
+  background: var(--oliva);
+  position: relative; flex-shrink: 0;
+}
+.dot-pulse::after {
+  content: ''; position: absolute; inset: -3px; border-radius: 50%;
+  background: var(--oliva); opacity: 0.5;
+  animation: pulse 1.8s var(--ease-standard) infinite;
+}
+@keyframes pulse {
+  0% { transform: scale(0.6); opacity: 0.55; }
+  70%, 100% { transform: scale(1.8); opacity: 0; }
+}
+.hdr-actions { display: flex; gap: 8px; flex-shrink: 0; padding-top: 4px; }
+.icon-btn {
+  width: 40px; height: 40px; border-radius: 12px;
+  background: var(--pure-white);
+  border: 1px solid var(--border-subtle);
+  display: inline-flex; align-items: center; justify-content: center;
+  cursor: pointer; position: relative;
+  color: var(--fg2);
+  transition: background var(--dur) var(--ease-standard), color var(--dur) var(--ease-standard);
+}
+.icon-btn:hover { background: var(--crema-200); color: var(--fg1); }
+.icon-btn:active { transform: scale(0.96); }
+.icon-btn .iconify { width: 18px; height: 18px; }
+.icon-btn .badge {
+  position: absolute; top: -4px; right: -4px;
+  min-width: 18px; height: 18px; padding: 0 5px;
+  border-radius: 999px;
+  background: var(--terracotta);
+  color: var(--crema-100);
+  font-size: 11px; font-weight: 700;
+  display: inline-flex; align-items: center; justify-content: center;
+  border: 2px solid var(--crema);
+}
+
+/* ============ Secciones ============ */
+.section { margin-top: 8px; }
+.section + .section { margin-top: 20px; }
+.section-head {
+  padding: 4px 20px 12px;
+  display: flex; align-items: center; gap: 12px;
+}
+.section-head .ico {
+  width: 36px; height: 36px; border-radius: 10px;
+  background: var(--terracotta-100); color: var(--terracotta-700);
+  display: inline-flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+}
+.section-head .ico .iconify { width: 18px; height: 18px; }
+.section-title { font-size: 17px; font-weight: 600; line-height: 1.2; color: var(--fg1); }
+.section-sub { font-size: 12px; color: var(--fg3); margin-top: 2px; }
+.section-eyebrow {
+  font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--fg3);
+  padding: 4px 20px 10px;
+}
+
+/* ============ KPIs ============ */
+.kpi-rail {
+  display: flex; gap: 10px;
+  padding: 0 20px 4px;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  scrollbar-width: none;
+}
+.kpi-rail::-webkit-scrollbar { display: none; }
+@media (min-width: 640px) {
+  .kpi-rail { display: grid; grid-template-columns: repeat(3, 1fr); overflow: visible; }
+}
+.kpi-card {
+  flex: 0 0 168px;
+  scroll-snap-align: start;
+  background: var(--pure-white);
+  border: 1px solid var(--border-subtle);
+  border-radius: 14px;
+  padding: 14px;
+  display: flex; flex-direction: column; gap: 8px;
+  min-height: 120px;
+  text-decoration: none;
+  transition: border-color var(--dur) var(--ease-standard), transform var(--dur) var(--ease-standard);
+}
+.kpi-card:hover { border-color: var(--border); }
+.kpi-card:active { transform: scale(0.98); }
+.kpi-card.accent {
+  background: linear-gradient(140deg, var(--espresso) 0%, #2B2A28 100%);
+  color: var(--crema-100); border-color: transparent;
+}
+.kpi-row-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
+.kpi-eyebrow {
+  font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--fg3);
+}
+.kpi-card.accent .kpi-eyebrow { color: rgba(243,237,228,0.6); }
+.kpi-value {
+  font-size: 26px; font-weight: 600;
+  letter-spacing: -0.02em; line-height: 1.1;
+  color: var(--fg1);
+  margin-top: 2px;
+}
+.kpi-card.accent .kpi-value { color: var(--crema-100); }
+.kpi-value .currency {
+  font-size: 14px; font-weight: 500; color: var(--fg3);
+  margin-right: 4px; vertical-align: 0.18em;
+}
+.kpi-card.accent .kpi-value .currency { color: rgba(243,237,228,0.55); }
+.kpi-value-dim { color: var(--fg3); font-weight: 500; }
+.kpi-value-accent { color: var(--terracotta-700); }
+.kpi-trend {
+  font-size: 12px; font-weight: 600;
+  display: inline-flex; align-items: center; gap: 4px;
+  color: var(--oliva-700);
+}
+.kpi-trend.accent { color: var(--terracotta-700); }
+.kpi-trend.warm { color: var(--mostaza-700); }
+.kpi-card.accent .kpi-trend { color: var(--mostaza-100); }
+.kpi-trend .iconify { width: 12px; height: 12px; }
+.kpi-meta { font-size: 12px; color: var(--fg3); margin-top: auto; }
+.kpi-card.accent .kpi-meta { color: rgba(243,237,228,0.55); }
+.kpi-mini {
+  display: flex; align-items: flex-end; gap: 2px; height: 18px;
+  margin-top: -2px;
+}
+.kpi-mini span { flex: 1; background: rgba(243,237,228,0.25); border-radius: 1.5px; }
+.kpi-mini span.on { background: var(--terracotta-300); }
+.kpi-ring { flex-shrink: 0; }
+
+/* ============ Alertas IA ============ */
+.alerts-wrap {
+  padding: 0 20px;
+  display: flex; flex-direction: column; gap: 10px;
+}
+.alert {
+  background: var(--pure-white);
+  border: 1px solid var(--border-subtle);
+  border-radius: 14px;
+  padding: 14px;
+  display: flex; gap: 12px;
+  position: relative;
+  overflow: hidden;
+}
+.alert::before {
+  content: ''; position: absolute; left: 0; top: 0; bottom: 0;
+  width: 3px;
+}
+.alert.critical::before { background: var(--danger); }
+.alert.warn::before { background: var(--mostaza); }
+.alert.opp::before { background: var(--oliva); }
+.alert-ico {
+  width: 36px; height: 36px; border-radius: 10px;
+  display: inline-flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+}
+.alert.critical .alert-ico { background: var(--danger-bg); color: var(--danger); }
+.alert.warn .alert-ico { background: var(--warning-bg); color: var(--mostaza-700); }
+.alert.opp .alert-ico { background: var(--success-bg); color: var(--oliva-700); }
+.alert-ico .iconify { width: 18px; height: 18px; }
+.alert-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.alert-tagline {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase;
+}
+.alert.critical .alert-tagline { color: var(--danger); }
+.alert.warn .alert-tagline { color: var(--mostaza-700); }
+.alert.opp .alert-tagline { color: var(--oliva-700); }
+.alert-title { font-size: 15px; font-weight: 600; line-height: 1.3; color: var(--fg1); margin: 0; }
+.alert-text { font-size: 13px; line-height: 1.45; color: var(--fg2); margin: 2px 0 4px; }
+.alert-text b { color: var(--fg1); font-weight: 600; }
+.alert-text .highlight {
+  background: linear-gradient(transparent 60%, var(--terracotta-100) 60%);
+  padding: 0 2px;
+  font-weight: 600;
+  color: var(--fg1);
+}
+.alert-actions { display: flex; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
+.delta-chip {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-family: var(--font-mono); font-size: 11px; font-weight: 500;
+  background: var(--crema-200); color: var(--fg2);
+  padding: 3px 8px; border-radius: 999px;
+  margin-top: 6px;
+  width: fit-content;
+}
+.delta-chip .from { text-decoration: line-through; opacity: 0.55; }
+.delta-chip .to { color: var(--danger); font-weight: 700; }
+.delta-chip .iconify { width: 11px; height: 11px; }
+.stock-pills { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px; }
+.stock-pill {
+  font-size: 11.5px; font-weight: 500;
+  background: var(--crema-200); color: var(--fg2);
+  padding: 4px 9px; border-radius: 999px;
+  display: inline-flex; align-items: center; gap: 5px;
+}
+.stock-pill .qty { color: var(--fg3); font-family: var(--font-mono); font-size: 10.5px; }
+
+/* ============ Botones del prototipo ============ */
+.btn {
+  font-weight: 600;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  padding: 9px 14px;
+  font-size: 13px;
+  cursor: pointer;
+  display: inline-flex; align-items: center; gap: 6px;
+  white-space: nowrap;
+  text-decoration: none;
+  transition: background var(--dur) var(--ease-standard), color var(--dur) var(--ease-standard), transform 80ms;
+  min-height: 36px;
+}
+.btn:active { transform: scale(0.97); }
+.btn-primary { background: var(--terracotta); color: var(--crema-100); }
+.btn-primary:hover { background: var(--terracotta-700); }
+.btn-ghost { background: transparent; color: var(--fg1); border-color: var(--border); }
+.btn-ghost:hover { background: var(--crema-200); }
+.btn-dark { background: var(--espresso); color: var(--crema-100); }
+.btn-dark:hover { background: var(--espresso-800); }
+.btn .iconify { width: 14px; height: 14px; }
+
+/* ============ Atajos ============ */
+.short-grid {
+  padding: 0 20px;
+  display: grid; grid-template-columns: 1fr 1fr; gap: 10px;
+}
+@media (min-width: 640px) {
+  .short-grid { grid-template-columns: repeat(4, 1fr); }
+}
+.short {
+  background: var(--pure-white);
+  border: 1px solid var(--border-subtle);
+  border-radius: 14px;
+  padding: 14px;
+  display: flex; flex-direction: column;
+  min-height: 116px;
+  position: relative;
+  text-align: left;
+  text-decoration: none;
+  transition: background var(--dur) var(--ease-standard), border-color var(--dur) var(--ease-standard), transform 80ms;
+}
+.short:active { transform: scale(0.98); }
+.short:hover { background: var(--crema-100); border-color: var(--border); }
+.short-ico {
+  width: 36px; height: 36px; border-radius: 10px;
+  background: var(--crema-200); color: var(--terracotta-700);
+  display: inline-flex; align-items: center; justify-content: center;
+  margin-bottom: auto;
+}
+.short-ico .iconify { width: 18px; height: 18px; }
+.short-label { margin-top: 14px; font-size: 14px; font-weight: 600; color: var(--fg1); }
+.short-sub { font-size: 12px; color: var(--fg3); margin-top: 2px; }
+.short-arrow { position: absolute; top: 14px; right: 14px; color: var(--fg3); }
+.short-arrow .iconify { width: 14px; height: 14px; }
+.short.featured {
+  background: linear-gradient(150deg, #FBF8F2 0%, var(--crema-200) 100%);
+  border-color: var(--terracotta-100);
+}
+.short.featured .short-ico { background: var(--terracotta); color: var(--crema-100); }
+
+/* ============ Tip ============ */
+.tip {
+  margin: 0 20px;
+  background: var(--crema-100);
+  border: 1px dashed var(--terracotta-300);
+  border-radius: 14px;
+  padding: 14px;
+  display: flex; gap: 12px;
+}
+.tip-ico {
+  width: 32px; height: 32px; border-radius: 10px;
+  background: var(--mostaza-100); color: var(--mostaza-700);
+  display: inline-flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+}
+.tip-ico .iconify { width: 16px; height: 16px; }
+.tip-body { font-size: 13px; line-height: 1.5; color: var(--fg2); }
+.tip-body b { color: var(--fg1); font-weight: 600; }
+.tip-eyebrow {
+  font-size: 10.5px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--terracotta-700);
+  display: block; margin-bottom: 3px;
+}
+</style>

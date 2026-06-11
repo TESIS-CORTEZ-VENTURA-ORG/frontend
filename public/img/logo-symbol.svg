@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" aria-label="GastronomIA">
+  
+  <circle cx="50" cy="50" r="48" fill="#C96A43"></circle>
+
+  
+  <circle cx="84" cy="86" r="8" fill="#C96A43"></circle>
+
+  
+  <circle cx="50" cy="50" r="38" fill="none" stroke="#F3EDE4" stroke-width="4"></circle>
+
+  
+  <circle cx="50" cy="50" r="34" fill="#C96A43"></circle>
+</svg>

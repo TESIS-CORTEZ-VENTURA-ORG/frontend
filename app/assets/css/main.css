@@ -1,0 +1,233 @@
+/* ============================================================
+   GastronomIA — Theme Nuxt UI / Tailwind v4
+   Paleta cálida bistró: terracota, crema, espresso
+   Fuente de verdad visual: gastronomia-v2/project/colors_and_type.css
+   ============================================================ */
+
+@import "tailwindcss";
+@import "@nuxt/ui";
+@import "./components.css";
+
+/* --- Webfonts de marca (TTF variables locales) --------------- */
+@font-face {
+  font-family: 'DM Sans';
+  src: url('../fonts/DMSans-VariableFont_opsz_wght.ttf') format('truetype-variations'),
+       url('../fonts/DMSans-VariableFont_opsz_wght.ttf') format('truetype');
+  font-weight: 100 1000;
+  font-stretch: 25% 151%;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Lora';
+  src: url('../fonts/Lora-VariableFont_wght.ttf') format('truetype-variations'),
+       url('../fonts/Lora-VariableFont_wght.ttf') format('truetype');
+  font-weight: 100 1000;
+  font-style: normal;
+  font-display: swap;
+}
+/* JetBrains Mono (código/SQL en chat) se añade como @fontsource
+   cuando se construya E09; mientras tanto cae al stack del sistema. */
+
+@theme static {
+  --font-sans: 'DM Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-serif: 'Lora', Georgia, 'Times New Roman', serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  /* Acento principal */
+  --color-terracotta-50: #FBF1EB;
+  --color-terracotta-100: #F5DACE;
+  --color-terracotta-200: #EEC3B2;
+  --color-terracotta-300: #E29A7E;
+  --color-terracotta-400: #D68260;
+  --color-terracotta-500: #C96A43;
+  --color-terracotta-600: #B85E38;
+  --color-terracotta-700: #A8542F;
+  --color-terracotta-800: #864326;
+  --color-terracotta-900: #6B361E;
+  --color-terracotta-950: #3A1D10;
+
+  /* Secundario / success */
+  --color-oliva-50: #F4F6F1;
+  --color-oliva-100: #D6DCCC;
+  --color-oliva-200: #C2CAB4;
+  --color-oliva-300: #A9B497;
+  --color-oliva-400: #8B987C;
+  --color-oliva-500: #6E7B61;
+  --color-oliva-600: #606C54;
+  --color-oliva-700: #525E47;
+  --color-oliva-800: #424B39;
+  --color-oliva-900: #333A2C;
+  --color-oliva-950: #1C2018;
+
+  /* Secundario / warning */
+  --color-mostaza-50: #FBF4E3;
+  --color-mostaza-100: #F1DDB0;
+  --color-mostaza-200: #EACF8F;
+  --color-mostaza-300: #E3BF6C;
+  --color-mostaza-400: #DDB156;
+  --color-mostaza-500: #D8A441;
+  --color-mostaza-600: #C49338;
+  --color-mostaza-700: #B0822E;
+  --color-mostaza-800: #8C6825;
+  --color-mostaza-900: #6B4F1C;
+  --color-mostaza-950: #3B2B0F;
+
+  /* Error */
+  --color-ladrillo-50: #FBF0ED;
+  --color-ladrillo-100: #F5D9D2;
+  --color-ladrillo-200: #EBB7AB;
+  --color-ladrillo-300: #DE8E7D;
+  --color-ladrillo-400: #C96252;
+  --color-ladrillo-500: #B33A2A;
+  --color-ladrillo-600: #A23426;
+  --color-ladrillo-700: #8A2C20;
+  --color-ladrillo-800: #6F2419;
+  --color-ladrillo-900: #571C13;
+  --color-ladrillo-950: #300F0A;
+
+  /* Info */
+  --color-lago-50: #F0F4F6;
+  --color-lago-100: #D8E2E7;
+  --color-lago-200: #BACBD3;
+  --color-lago-300: #97B0BC;
+  --color-lago-400: #6F8E9E;
+  --color-lago-500: #4A6B7B;
+  --color-lago-600: #426071;
+  --color-lago-700: #385263;
+  --color-lago-800: #2D424F;
+  --color-lago-900: #233340;
+  --color-lago-950: #131D24;
+
+  /* Neutro cálido: crema → espresso */
+  --color-espresso-50: #FBF8F2;
+  --color-espresso-100: #F8F4ED;
+  --color-espresso-200: #EAE2D5;
+  --color-espresso-300: #D8CDBC;
+  --color-espresso-400: #B0A99F;
+  --color-espresso-500: #807B75;
+  --color-espresso-600: #4A4744;
+  --color-espresso-700: #3A3835;
+  --color-espresso-800: #2B2A28;
+  --color-espresso-900: #1A1A1A;
+  --color-espresso-950: #121110;
+
+  --color-crema: #F3EDE4;
+}
+
+:root {
+  /* ===== Tokens crudos del prototipo (para portar las 46 pantallas 1:1) ===== */
+  --terracotta: #C96A43;
+  --terracotta-700: #A8542F;
+  --terracotta-300: #E29A7E;
+  --terracotta-100: #F5DACE;
+
+  --espresso: #1A1A1A;
+  --espresso-800: #2B2A28;
+  --espresso-600: #4A4744;
+  --espresso-400: #807B75;
+
+  --crema: #F3EDE4;
+  --crema-200: #EAE2D5;
+  --crema-100: #F8F4ED;
+  --crema-50: #FBF8F2;
+  --pure-white: #FFFFFF;
+
+  --mostaza: #D8A441;
+  --mostaza-700: #B0822E;
+  --mostaza-100: #F1DDB0;
+
+  --oliva: #6E7B61;
+  --oliva-700: #525E47;
+  --oliva-100: #D6DCCC;
+
+  --success: var(--oliva);
+  --success-bg: var(--oliva-100);
+  --warning: var(--mostaza);
+  --warning-bg: var(--mostaza-100);
+  --danger: #B33A2A;
+  --danger-bg: #F5D9D2;
+  --info: #4A6B7B;
+  --info-bg: #D8E2E7;
+
+  --bg: var(--crema);
+  --bg-elevated: var(--crema-100);
+  --bg-card: var(--pure-white);
+  --bg-inverse: var(--espresso);
+  --bg-accent: var(--terracotta);
+
+  --fg1: var(--espresso);
+  --fg2: var(--espresso-600);
+  --fg3: var(--espresso-400);
+  --fg-inverse: var(--crema-100);
+  --fg-accent: var(--terracotta);
+  --fg-on-accent: var(--crema-100);
+
+  --border-subtle: rgba(26, 26, 26, 0.08);
+  --border: rgba(26, 26, 26, 0.14);
+  --border-strong: rgba(26, 26, 26, 0.28);
+
+  --shadow-xs: 0 1px 0 rgba(26,26,26,0.04);
+  --shadow-sm: 0 1px 2px rgba(26,26,26,0.06), 0 1px 1px rgba(26,26,26,0.04);
+  --shadow: 0 4px 12px rgba(26,26,26,0.06), 0 1px 2px rgba(26,26,26,0.04);
+  --shadow-lg: 0 12px 32px rgba(26,26,26,0.10), 0 2px 6px rgba(26,26,26,0.05);
+  --focus-ring: 0 0 0 3px rgba(201, 106, 67, 0.28);
+
+  --ease-standard: cubic-bezier(0.2, 0, 0.1, 1);
+  --ease-emphasis: cubic-bezier(0.32, 0.72, 0, 1);
+  --dur-fast: 120ms;
+  --dur: 200ms;
+  --dur-slow: 320ms;
+
+  /* ===== Design tokens de Nuxt UI → bistró ===== */
+  --ui-bg: var(--crema);
+  --ui-bg-muted: var(--crema-200);
+  --ui-bg-elevated: var(--pure-white);
+  --ui-bg-accented: var(--crema-200);
+  --ui-bg-inverted: var(--espresso);
+  --ui-text-dimmed: var(--espresso-400);
+  --ui-text-muted: var(--espresso-600);
+  --ui-text-toned: var(--espresso-600);
+  --ui-text: var(--espresso-800);
+  --ui-text-highlighted: var(--espresso);
+  --ui-text-inverted: var(--crema-100);
+  --ui-border: rgba(26, 26, 26, 0.14);
+  --ui-border-muted: rgba(26, 26, 26, 0.08);
+  --ui-border-accented: rgba(26, 26, 26, 0.28);
+  --ui-radius: 0.5rem;
+}
+
+html, body {
+  background: var(--ui-bg);
+  color: var(--ui-text-highlighted);
+  font-family: var(--font-sans);
+  font-size: 15px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+@layer components {
+  /* Titulares editoriales: Lora italic */
+  .display {
+    font-family: var(--font-serif);
+    font-weight: 500;
+    font-style: italic;
+    line-height: 1.15;
+    letter-spacing: -0.02em;
+    color: var(--fg1);
+  }
+  .editorial {
+    font-family: var(--font-serif);
+    font-style: italic;
+    line-height: 1.3;
+    color: var(--fg1);
+  }
+  .eyebrow {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--fg3);
+  }
+}

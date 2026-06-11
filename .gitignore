@@ -22,3 +22,9 @@ logs
 .env
 .env.*
 !.env.example
+
+# Prototipo de referencia (implementado al 100% — vive solo en local)
+gastronomia-v2/
+
+# Capturas generadas por npm run test:visual (regenerables)
+tests/visual/shots/
