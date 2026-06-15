@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import type { Recipe } from '#shared/types/domain'
+import { updateRecipe } from '../../utils/e02-adapter'
 
 const patchRecipeSchema = z.object({
   name: z.string().min(2).optional(),
@@ -19,24 +19,12 @@ const patchRecipeSchema = z.object({
   active: z.boolean().optional(),
 })
 
+// Reparte el patch: BOM/presentación → Recipe; precio/estado/categoría → MenuItem.
 export default defineEventHandler(async (event) => {
-  const db = useMockDb()
   const id = getRouterParam(event, 'id')
-  const recipe = db.recipes.find(r => r.id === id)
-  if (!recipe) {
-    throw createError({ statusCode: 404, statusMessage: 'Receta no encontrada' })
+  if (!id) {
+    throw createError({ statusCode: 400, statusMessage: 'Falta el id' })
   }
-
   const body = await readValidatedBody(event, patchRecipeSchema.parse)
-  Object.assign(recipe, body)
-
-  const updated: Recipe = recipe
-  updated.cost = +updated.items
-    .reduce((sum, it) => sum + it.cost * (1 + it.wastePct / 100), 0)
-    .toFixed(2)
-  updated.marginPct = updated.sellPrice > 0
-    ? Math.round(((updated.sellPrice - updated.cost) / updated.sellPrice) * 100)
-    : 0
-
-  return ok(updated)
+  return ok(await updateRecipe(event, id, body))
 })

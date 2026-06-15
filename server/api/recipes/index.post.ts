@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { createRecipe } from '../../utils/e02-adapter'
 
 const recipeItemSchema = z.object({
   ingredientId: z.string(),
@@ -21,24 +22,9 @@ const createRecipeSchema = z.object({
   active: z.boolean().default(true),
 })
 
+// Crea la receta (BOM) y, si es plato, su MenuItem (precio/categoría) en el backend.
 export default defineEventHandler(async (event) => {
-  const db = useMockDb()
   const body = await readValidatedBody(event, createRecipeSchema.parse)
-
-  const cost = +body.items
-    .reduce((sum, it) => sum + it.cost * (1 + it.wastePct / 100), 0)
-    .toFixed(2)
-  const marginPct = body.sellPrice > 0
-    ? Math.round(((body.sellPrice - cost) / body.sellPrice) * 100)
-    : 0
-
-  const recipe = {
-    ...body,
-    id: nextId(db, 'rec'),
-    cost,
-    marginPct,
-    soldToday: 0,
-  }
-  db.recipes.unshift(recipe)
+  const recipe = await createRecipe(event, body)
   return ok(recipe)
 })

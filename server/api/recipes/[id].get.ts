@@ -1,9 +1,9 @@
-export default defineEventHandler((event) => {
-  const db = useMockDb()
+import { buildRecipeDetail } from '../../utils/e02-adapter'
+
+export default defineEventHandler(async (event) => {
   const id = getRouterParam(event, 'id')
-  const recipe = db.recipes.find(r => r.id === id)
-  if (!recipe) {
-    throw createError({ statusCode: 404, statusMessage: 'Receta no encontrada' })
+  if (!id) {
+    throw createError({ statusCode: 400, statusMessage: 'Falta el id' })
   }
-  return ok(recipe)
+  return ok(await buildRecipeDetail(event, id))
 })

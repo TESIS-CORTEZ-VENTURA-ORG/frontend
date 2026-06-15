@@ -237,7 +237,7 @@ function saveDetail(): void {
     wastePct: dWaste.value || 0,
     wasteReason: dWaste.value > 0 ? dReason.value : null,
     noCost: detailIsNoCost.value,
-    critical: ing ? ing.stock < ing.minStock : false,
+    critical: ing && !ing.stockPending ? ing.stock < ing.minStock : false,
   }
   if (editingKey.value) {
     const idx = items.value.findIndex(i => i.key === editingKey.value)
@@ -930,9 +930,12 @@ async function save(): Promise<void> {
         <div>
           <div class="rw-search-result-name">
             {{ ing.name }}
-            <UIcon v-if="ing.stock < ing.minStock" name="i-lucide-alert-triangle" class="crit-ico" />
+            <UIcon v-if="!ing.stockPending && ing.stock < ing.minStock" name="i-lucide-alert-triangle" class="crit-ico" />
           </div>
-          <div class="rw-search-result-meta">Stock: {{ ing.stock }} {{ ing.unit }}</div>
+          <div class="rw-search-result-meta">
+            <template v-if="ing.stockPending">Stock: pendiente (E05)</template>
+            <template v-else>Stock: {{ ing.stock }} {{ ing.unit }}</template>
+          </div>
         </div>
         <div class="rw-search-result-cost">
           <span v-if="ing.unitCost === 0" class="nocost">
@@ -960,7 +963,7 @@ async function save(): Promise<void> {
           <div class="meta">
             <template v-if="detailIsNoCost">Sin costo registrado</template>
             <template v-else-if="pickedIngredient">
-              {{ ingredientCostLabel(pickedIngredient) }} · stock {{ pickedIngredient.stock }} {{ pickedIngredient.unit }}
+              {{ ingredientCostLabel(pickedIngredient) }}<template v-if="!pickedIngredient.stockPending"> · stock {{ pickedIngredient.stock }} {{ pickedIngredient.unit }}</template>
             </template>
             <template v-else>Costo manual</template>
           </div>
