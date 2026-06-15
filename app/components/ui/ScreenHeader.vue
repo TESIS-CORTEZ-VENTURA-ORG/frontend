@@ -8,18 +8,25 @@ const props = defineProps<{
 const router = useRouter()
 
 function goBack(): void {
-  if (props.back) {
-    void navigateTo(props.back)
+  // Prioriza el historial real: vuelve a DONDE vino el usuario, no a un padre
+  // fijo. Sin esto, entrar a una subpágina desde otra ruta (p. ej. Mesas →
+  // "Configurar mesas" → Ajustes › Mesas) hacía que "atrás" saltara al padre
+  // hardcodeado en lugar de regresar a Mesas.
+  // El prop `back` queda como destino de respaldo solo cuando NO hay historial
+  // dentro de la app (carga directa / deep-link / recarga).
+  const hasInAppHistory = Boolean(router.options.history.state?.back)
+  if (hasInAppHistory) {
+    router.back()
   }
   else {
-    router.back()
+    void navigateTo(props.back ?? '/app')
   }
 }
 </script>
 
 <template>
   <header class="screen-hdr">
-    <button class="hdr-back" aria-label="Volver" @click="goBack">
+    <button class="icon-btn" aria-label="Volver" @click="goBack">
       <UIcon name="i-lucide-arrow-left" />
     </button>
     <div class="hdr-body">
@@ -42,18 +49,7 @@ function goBack(): void {
 @media (min-width: 1024px) {
   .screen-hdr { padding-top: 28px; }
 }
-.hdr-back {
-  width: 40px; height: 40px; border-radius: 12px;
-  background: var(--pure-white);
-  border: 1px solid var(--border-subtle);
-  display: inline-flex; align-items: center; justify-content: center;
-  cursor: pointer;
-  color: var(--fg2);
-  flex-shrink: 0;
-  transition: background var(--dur) var(--ease-standard), color var(--dur) var(--ease-standard);
-}
-.hdr-back:hover { background: var(--crema-200); color: var(--fg1); }
-.hdr-back .iconify { width: 18px; height: 18px; }
+/* El botón "atrás" usa el .icon-btn global (components.css) */
 .hdr-body { flex: 1; min-width: 0; }
 .hdr-title {
   font-size: 22px; font-weight: 600;
