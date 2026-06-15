@@ -303,14 +303,14 @@ onBeforeUnmount(() => window.removeEventListener('scroll', onScroll))
     <div class="rep-top" :class="{ scrolled }">
       <!-- 1. Header -->
       <header id="reports-header" class="rep-hdr">
-        <button class="rep-icon-btn" aria-label="Volver" @click="goBack">
+        <button class="icon-btn" aria-label="Volver" @click="goBack">
           <UIcon name="i-lucide-arrow-left" />
         </button>
         <div class="rep-hdr-center">
           <h1 class="rep-hdr-title">Reportes</h1>
           <div class="rep-hdr-sub">{{ data.subtitle }}</div>
         </div>
-        <button class="rep-icon-btn" aria-label="Compartir reporte" @click="showShare = true">
+        <button class="icon-btn" aria-label="Compartir reporte" @click="showShare = true">
           <UIcon name="i-lucide-share-2" />
         </button>
       </header>
@@ -694,17 +694,7 @@ onBeforeUnmount(() => window.removeEventListener('scroll', onScroll))
 @media (min-width: 1024px) {
   .rep-hdr { padding-top: 28px; }
 }
-.rep-icon-btn {
-  width: 40px; height: 40px; border-radius: 12px;
-  background: var(--pure-white);
-  border: 1px solid var(--border-subtle);
-  display: inline-flex; align-items: center; justify-content: center;
-  color: var(--fg1); cursor: pointer;
-  transition: background var(--dur), color var(--dur), transform 80ms;
-}
-.rep-icon-btn:hover { background: var(--crema-100); }
-.rep-icon-btn:active { transform: scale(0.95); }
-.rep-icon-btn :deep(svg) { width: 19px; height: 19px; }
+/* botones de ícono del header → .icon-btn global (components.css) */
 .rep-hdr-center { text-align: center; min-width: 0; }
 .rep-hdr-title {
   font-family: var(--font-serif);

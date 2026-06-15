@@ -81,7 +81,7 @@ for (const route of APP_ROUTES) {
   if (await page.locator('.wip').count()) wip.push(route)
 }
 record('Crawl sin errores de consola/JS', consoleErrors.length === 0, `${consoleErrors.length} errores`)
-record('Solo /app/reports en construcción', wip.length === 1 && wip[0] === '/app/reports', `WIP: ${wip.join(', ') || 'ninguna'}`)
+record('Ninguna ruta cae al placeholder "en construcción"', wip.length === 0, `WIP: ${wip.join(', ') || 'ninguna'}`)
 
 // 2) Navegación "atrás" (ScreenHeader history-aware)
 console.log('\n— 2. Navegación "atrás"')
