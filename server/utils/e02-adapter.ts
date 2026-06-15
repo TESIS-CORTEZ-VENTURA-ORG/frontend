@@ -167,12 +167,36 @@ interface RecipePayload {
   active?: boolean
 }
 
-function toBackendItems(items: RecipeItem[]) {
-  return items.map(it => ({
-    ingredientId: it.ingredientId,
-    qty: it.qty,
-    wasteFactor: (it.wastePct ?? 0) / 100,
-  }))
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+/**
+ * Mapea los ítems del BOM al backend. Los ítems "ad-hoc" del wizard (creados
+ * en línea, con id no-UUID y costo manual) se **persisten como insumos** del
+ * catálogo antes de referenciarlos — el backend exige que cada ítem apunte a un
+ * insumo o sub-receta real.
+ */
+async function resolveBackendItems(event: H3Event, items: RecipeItem[]) {
+  const out: { ingredientId: string, qty: number, wasteFactor: number }[] = []
+  for (const it of items) {
+    let ingredientId = it.ingredientId
+    if (!UUID_RE.test(ingredientId)) {
+      const unitCost = it.qty > 0 ? it.cost / it.qty : it.cost
+      const slug = it.name.trim().toUpperCase().replace(/[^A-Z0-9]+/g, '-').slice(0, 32) || 'INSUMO'
+      const created = await backendFetch<Envelope<{ id: string }>>(event, '/api/ingredients', {
+        method: 'POST',
+        body: {
+          sku: `AUTO-${slug}-${Math.round(unitCost * 100)}`,
+          name: it.name,
+          type: 'raw',
+          unit: it.unit || 'unidad',
+          unitCost: Number(unitCost.toFixed(2)),
+        },
+      })
+      ingredientId = created.data.id
+    }
+    out.push({ ingredientId, qty: it.qty, wasteFactor: (it.wastePct ?? 0) / 100 })
+  }
+  return out
 }
 
 /** Resuelve (o crea) la categoría de menú por nombre → id. */
@@ -189,6 +213,7 @@ async function resolveMenuCategoryId(event: H3Event, name: string): Promise<stri
 
 export async function createRecipe(event: H3Event, payload: RecipePayload): Promise<Recipe> {
   const kind = payload.kind ?? 'dish'
+  const items = await resolveBackendItems(event, payload.items)
   const recipe = await backendFetch<Envelope<BeRecipeView>>(event, '/api/recipes', {
     method: 'POST',
     body: {
@@ -197,7 +222,7 @@ export async function createRecipe(event: H3Event, payload: RecipePayload): Prom
       emoji: payload.emoji,
       description: payload.description,
       prepMinutes: payload.prepMinutes,
-      items: toBackendItems(payload.items),
+      items,
     },
   })
   if (kind === 'dish') {
@@ -228,7 +253,7 @@ export async function updateRecipe(
   if (payload.emoji !== undefined) recipeBody.emoji = payload.emoji
   if (payload.description !== undefined) recipeBody.description = payload.description
   if (payload.prepMinutes !== undefined) recipeBody.prepMinutes = payload.prepMinutes
-  if (payload.items !== undefined) recipeBody.items = toBackendItems(payload.items)
+  if (payload.items !== undefined) recipeBody.items = await resolveBackendItems(event, payload.items)
   if (Object.keys(recipeBody).length > 0) {
     await backendFetch<Envelope<BeRecipeView>>(event, `/api/recipes/${id}`, {
       method: 'PATCH',
