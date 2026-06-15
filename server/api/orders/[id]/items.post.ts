@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { addOrderItems } from '../../../utils/pos-adapter'
 
 const addItemsSchema = z.object({
   items: z.array(z.object({
@@ -8,32 +9,10 @@ const addItemsSchema = z.object({
   })).min(1),
 })
 
+// Proxy → backend E03: resuelve recipeId → menuItemId y POST /api/orders/:id/items.
 export default defineEventHandler(async (event) => {
-  const db = useMockDb()
-  const id = getRouterParam(event, 'id')
-  const order = db.orders.find(o => o.id === id)
-  if (!order || order.status !== 'open') {
-    throw createError({ statusCode: 404, statusMessage: 'Orden no encontrada o cerrada' })
-  }
-
+  const id = getRouterParam(event, 'id') as string
   const body = await readValidatedBody(event, addItemsSchema.parse)
-
-  for (const line of body.items) {
-    const recipe = db.recipes.find(r => r.id === line.recipeId)
-    if (!recipe) {
-      throw createError({ statusCode: 422, statusMessage: `Receta ${line.recipeId} no existe` })
-    }
-    order.items.push({
-      id: nextId(db, 'oi'),
-      recipeId: recipe.id,
-      name: recipe.name,
-      qty: line.qty,
-      unitPrice: recipe.sellPrice,
-      notes: line.notes,
-      status: 'pending',
-    })
-    recipe.soldToday += line.qty
-  }
-
+  const order = await addOrderItems(event, id, body.items)
   return ok(order)
 })

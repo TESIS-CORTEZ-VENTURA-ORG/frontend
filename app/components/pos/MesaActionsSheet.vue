@@ -90,9 +90,13 @@ async function closeWithoutCharge(): Promise<void> {
       ? otherText.value.trim()
       : CLOSE_REASONS.find(r => r.id === reason.value)?.label ?? ''
     if (props.order) {
-      await patchOrder.mutateAsync({ orderId: props.order.id, status: 'void' })
+      // HU-03-11: el backend exige razón; va en `voidReason` y libera la mesa.
+      await patchOrder.mutateAsync({ orderId: props.order.id, status: 'void', voidReason: reasonLabel })
     }
-    await patchTable.mutateAsync({ id: props.table.id, status: 'free' })
+    else {
+      // Sin orden activa (p. ej. mesa reservada): solo liberar la mesa.
+      await patchTable.mutateAsync({ id: props.table.id, status: 'free' })
+    }
     confirmClose.value = false
     toast.add({ title: `Mesa ${tableLabel.value} cerrada sin cobrar · ${reasonLabel}`, icon: 'i-lucide-circle-x' })
     await navigateTo('/app/pos')

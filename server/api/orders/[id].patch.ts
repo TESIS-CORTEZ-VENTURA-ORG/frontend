@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { patchOrder } from '../../utils/pos-adapter'
 
 const patchOrderSchema = z.object({
   discount: z.object({
@@ -14,49 +15,15 @@ const patchOrderSchema = z.object({
     remove: z.boolean().optional(),
   })).optional(),
   status: z.enum(['open', 'void']).optional(),
+  // HU-03-11: razón de anulación (la UI la envía); el backend la exige en /void.
+  voidReason: z.string().optional(),
 })
 
+// Proxy → backend E03: itemUpdates → PATCH /items/:itemId; status:'void' →
+// POST /void {reason}. discount/unitPrice (E04 billing) se aceptan e ignoran.
 export default defineEventHandler(async (event) => {
-  const db = useMockDb()
-  const id = getRouterParam(event, 'id')
-  const order = db.orders.find(o => o.id === id)
-  if (!order) {
-    throw createError({ statusCode: 404, statusMessage: 'Orden no encontrada' })
-  }
-
+  const id = getRouterParam(event, 'id') as string
   const body = await readValidatedBody(event, patchOrderSchema.parse)
-
-  if (body.discount !== undefined) {
-    order.discount = body.discount ?? undefined
-  }
-  if (body.status) {
-    order.status = body.status
-  }
-  for (const upd of body.itemUpdates ?? []) {
-    const idx = order.items.findIndex(it => it.id === upd.id)
-    if (idx === -1) continue
-    if (upd.remove) {
-      order.items.splice(idx, 1)
-      continue
-    }
-    const item = order.items[idx]
-    if (item) {
-      if (upd.qty !== undefined) item.qty = upd.qty
-      if (upd.status !== undefined) item.status = upd.status
-      if (upd.unitPrice !== undefined) item.unitPrice = upd.unitPrice
-    }
-  }
-
-  if (body.status === 'void') {
-    const table = db.tables.find(t => t.id === order.tableId)
-    if (table) {
-      table.status = 'free'
-      table.openedAt = undefined
-      table.orderId = undefined
-      table.guests = undefined
-      table.waiter = undefined
-    }
-  }
-
+  const order = await patchOrder(event, id, body)
   return ok(order)
 })

@@ -8,6 +8,7 @@ const tableId = computed(() => String(route.params.id))
 
 const { data, refresh } = useTable(tableId)
 const addItems = useAddOrderItems()
+const sendKitchen = useSendToKitchen()
 const patchOrder = usePatchOrder()
 const toast = useToast()
 const { user } = useUserSession()
@@ -79,14 +80,17 @@ function cartDec(line: CartLine): void {
   }
 }
 
-// ===== Enviar a cocina =====
+// ===== Enviar a cocina (HU-03-06) =====
 async function sendToKitchen(): Promise<void> {
   if (!hasPending.value || !order.value) return
   const count = cart.value.length
+  // 1) Persistir los ítems del carrito en la orden (quedan `pending`).
   await addItems.mutateAsync({
     orderId: order.value.id,
     items: cart.value.map(l => ({ recipeId: l.recipeId, qty: l.qty })),
   })
+  // 2) Enviar la comanda a cocina: el backend rutea los pending a sus estaciones.
+  await sendKitchen.mutateAsync({ orderId: order.value.id })
   cart.value = []
   justSent.value = true
   setTimeout(() => { justSent.value = false }, 700)
