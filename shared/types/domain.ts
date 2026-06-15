@@ -8,6 +8,8 @@
 
 export type RecipeKind = 'dish' | 'sub_recipe'
 
+export type StockStatus = 'ok' | 'low' | 'critical'
+
 export interface Ingredient {
   id: string
   name: string
@@ -18,11 +20,11 @@ export interface Ingredient {
   minStock: number
   updatedAt: string
   /**
-   * El stock/mínimos los gobierna Inventario (E05). Cuando los datos vienen del
-   * catálogo (E02) sin inventario aún, este flag es `true` y la UI muestra
-   * "pendiente" en vez de un número engañoso.
+   * Estado del stock frente al mínimo de reorden, calculado por Inventario (E05):
+   * `critical` ≤ min·0.5, `low` < min, si no `ok`. El BFF lo fusiona desde
+   * `GET /api/inventory/stock`.
    */
-  stockPending?: boolean
+  status?: StockStatus
 }
 
 export interface RecipeItem {
@@ -193,6 +195,31 @@ export interface ShoppingItem {
   reason: string
   urgent: boolean
   checked: boolean
+}
+
+// ===== Órdenes de Compra (E05 Inc2) =====
+// Dinero/cantidades como string (autoritativos del backend); la UI los formatea.
+export type PurchaseOrderStatus = 'draft' | 'sent' | 'partially_received' | 'received' | 'cancelled'
+
+export interface PurchaseOrderItem {
+  id: string
+  ingredientId: string
+  ingredientName: string
+  qtyOrdered: string
+  qtyReceived: string
+  unitCost: string
+  lineTotal: string
+}
+
+export interface PurchaseOrder {
+  id: string
+  supplierId: string
+  supplierName: string
+  status: PurchaseOrderStatus
+  expectedAt: string | null
+  notes: string | null
+  items: PurchaseOrderItem[]
+  total: string
 }
 
 // ===== Notificaciones =====

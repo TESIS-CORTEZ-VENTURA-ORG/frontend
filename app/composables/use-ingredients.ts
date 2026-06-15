@@ -19,7 +19,12 @@ export function useUpdateIngredient() {
         method: 'PATCH',
         body: payload,
       }).then(r => r.data),
-    onSettled: () => cache.invalidateQueries({ key: ['ingredients'] }),
+    // El `minStock` afecta al inventario (E05) → invalidar también stock/alertas.
+    onSettled: () => Promise.all([
+      cache.invalidateQueries({ key: ['ingredients'] }),
+      cache.invalidateQueries({ key: ['stock-levels'] }),
+      cache.invalidateQueries({ key: ['inventory-alerts'] }),
+    ]),
   })
 }
 

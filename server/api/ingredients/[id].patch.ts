@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import { backendFetch } from '../../utils/backend'
 import { toFrontendIngredient } from '../../utils/e02-adapter'
+import { updateLevel } from '../../utils/inventory-adapter'
 
 interface Envelope<T> { success: boolean, data: T }
 interface BeIngredient {
@@ -19,26 +20,61 @@ const patchIngredientSchema = z.object({
   category: z.string().min(1).optional(),
   unit: z.string().min(1).optional(),
   unitCost: z.number().nonnegative().optional(),
-  // stock/minStock pertenecen a Inventario (E05): se aceptan pero se ignoran hasta entonces.
+  // minStock pertenece a Inventario (E05): se enruta a PATCH /api/inventory/levels/:id.
   minStock: z.number().nonnegative().optional(),
+  // `stock` no se setea por edición directa (se mueve vía movimientos): se ignora.
   stock: z.number().nonnegative().optional(),
 })
 
+// PATCH insumo: los campos de catálogo (E02) van a /api/ingredients/:id; el
+// `minStock` (umbral de reorden, E05) va a /api/inventory/levels/:id. Devuelve el
+// insumo con el stock/mínimo/estado fusionados desde Inventario.
 export default defineEventHandler(async (event) => {
   const id = getRouterParam(event, 'id')
   if (!id) {
     throw createError({ statusCode: 400, statusMessage: 'Falta el id' })
   }
   const body = await readValidatedBody(event, patchIngredientSchema.parse)
+
   const beBody: Record<string, unknown> = {}
   if (body.name !== undefined) beBody.name = body.name
   if (body.category !== undefined) beBody.category = body.category
   if (body.unit !== undefined) beBody.unit = body.unit
   if (body.unitCost !== undefined) beBody.unitCost = body.unitCost
 
-  const res = await backendFetch<Envelope<BeIngredient>>(event, `/api/ingredients/${id}`, {
-    method: 'PATCH',
-    body: beBody,
-  })
-  return ok(toFrontendIngredient(res.data))
+  let updatedAt: string | undefined
+  let beIngredient: BeIngredient | undefined
+  if (Object.keys(beBody).length > 0) {
+    const res = await backendFetch<Envelope<BeIngredient>>(event, `/api/ingredients/${id}`, {
+      method: 'PATCH',
+      body: beBody,
+    })
+    beIngredient = res.data
+    updatedAt = res.data.updatedAt
+  }
+
+  // Umbral de reorden → Inventario (E05). Devuelve el StockView actualizado.
+  let level: { stock: string, minStock: string, status: 'ok' | 'low' | 'critical' } | undefined
+  if (body.minStock !== undefined) {
+    level = await updateLevel(event, id, body.minStock)
+  }
+
+  // Si solo se tocó el mínimo (sin cambios de catálogo), traemos el insumo para el shape.
+  if (!beIngredient) {
+    const res = await backendFetch<Envelope<BeIngredient[]>>(event, '/api/ingredients')
+    const found = res.data.find(i => i.id === id)
+    if (!found) {
+      throw createError({ statusCode: 404, statusMessage: 'Insumo no encontrado' })
+    }
+    beIngredient = found
+    updatedAt = found.updatedAt
+  }
+
+  const ing = toFrontendIngredient({ ...beIngredient, updatedAt: updatedAt ?? beIngredient.updatedAt })
+  if (level) {
+    ing.stock = Number(level.stock)
+    ing.minStock = Number(level.minStock)
+    ing.status = level.status
+  }
+  return ok(ing)
 })
