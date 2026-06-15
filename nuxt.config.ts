@@ -26,7 +26,7 @@ export default defineNuxtConfig({
         { name: 'description', content: 'Control de rentabilidad con IA para tu restaurante' },
       ],
       link: [
-        { rel: 'icon', type: 'image/svg+xml', href: '/img/logo-symbol.svg' },
+        { rel: 'icon', type: 'image/svg+xml', href: '/img/logo.svg' },
         { rel: 'apple-touch-icon', href: '/apple-touch-icon.png' },
       ],
     },

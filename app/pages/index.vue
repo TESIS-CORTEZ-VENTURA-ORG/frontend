@@ -11,8 +11,7 @@ useSeoMeta({
   <div class="landing">
     <header class="landing-hdr">
       <div class="brand">
-        <img src="/img/logo-symbol.svg" alt="" width="26" height="26">
-        <span class="brand-name">Gastronom<em>IA</em></span>
+        <img src="/img/gastronomia-logo.svg" alt="GastronomIA" class="brand-logo">
       </div>
       <UButton
         :to="loggedIn ? '/app' : '/login'"
@@ -78,9 +77,8 @@ useSeoMeta({
   padding: 16px 20px;
   max-width: 1080px; width: 100%; margin: 0 auto;
 }
-.brand { display: flex; align-items: center; gap: 9px; }
-.brand-name { font-weight: 600; font-size: 15px; color: var(--fg1); letter-spacing: -0.003em; }
-.brand-name em { font-style: normal; color: var(--terracotta); }
+.brand { display: flex; align-items: center; }
+.brand-logo { height: 20px; width: auto; display: block; }
 
 .hero {
   flex: 1;

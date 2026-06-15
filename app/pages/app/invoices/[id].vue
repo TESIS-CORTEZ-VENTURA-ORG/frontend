@@ -48,7 +48,7 @@ function print(): void {
         <div v-if="sale.status === 'void'" class="ticket-void-stamp" aria-label="Comprobante anulado">ANULADA</div>
 
         <header class="ticket-head">
-          <img src="/img/logo-symbol.svg" alt="" width="32" height="32">
+          <img src="/img/logo.svg" alt="" width="32" height="32">
           <div class="ticket-biz">Motif Restobar Karaoke</div>
           <div class="ticket-meta">RUC 20612345678 · San Juan de Lurigancho</div>
           <div class="ticket-doc">

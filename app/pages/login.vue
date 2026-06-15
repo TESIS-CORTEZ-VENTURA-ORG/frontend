@@ -46,8 +46,7 @@ async function onSubmit(event: FormSubmitEvent<LoginInput>): Promise<void> {
     <div class="login-body">
       <div class="login-brand">
         <div class="brand">
-          <img src="/img/logo-symbol.svg" alt="" width="24" height="24">
-          <span class="brand-name">Gastronom<em>IA</em></span>
+          <img src="/img/gastronomia-logo.svg" alt="GastronomIA" class="brand-logo">
         </div>
         <h1 class="login-title">Bienvenido de vuelta</h1>
         <p class="login-sub">Inicia sesión para continuar</p>
@@ -164,9 +163,8 @@ async function onSubmit(event: FormSubmitEvent<LoginInput>): Promise<void> {
   display: flex; flex-direction: column;
 }
 .login-brand { display: flex; flex-direction: column; gap: 10px; }
-.brand { display: flex; align-items: center; gap: 9px; }
-.brand-name { font-weight: 600; font-size: 13.5px; color: var(--fg2); letter-spacing: -0.003em; }
-.brand-name em { font-style: normal; color: var(--terracotta); }
+.brand { display: flex; align-items: center; }
+.brand-logo { height: 18px; width: auto; display: block; }
 .login-title {
   margin: 0;
   font-weight: 600; font-size: 26px; line-height: 1.15;

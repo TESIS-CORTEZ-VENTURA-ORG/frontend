@@ -153,10 +153,10 @@ function confirmClear(): void {
     <!-- ============ Header ============ -->
     <header class="chat-hdr">
       <div class="chat-avatar" aria-hidden="true">
-        <img src="/img/logo-symbol.svg" alt="">
+        <img src="/img/logo.svg" alt="">
       </div>
       <div class="chat-titles">
-        <h1 class="chat-title">Gastronom<span class="ia">IA</span></h1>
+        <h1 class="chat-title"><img src="/img/gastronomia-logo.svg" alt="GastronomIA" class="chat-title-logo"></h1>
         <div class="chat-subtitle">
           <span class="live-dot" aria-hidden="true" />
           Tu asistente de cocina IA
@@ -183,7 +183,7 @@ function confirmClear(): void {
       <template v-if="messages.length === 0">
         <div class="msg-row ai">
           <div class="msg-avatar" aria-hidden="true">
-            <img src="/img/logo-symbol.svg" alt="">
+            <img src="/img/logo.svg" alt="">
           </div>
           <div class="msg-stack">
             <div class="bubble">
@@ -238,7 +238,7 @@ function confirmClear(): void {
           :class="m.role === 'user' ? 'me' : 'ai'"
         >
           <div class="msg-avatar" aria-hidden="true">
-            <img v-if="m.role === 'assistant'" src="/img/logo-symbol.svg" alt="">
+            <img v-if="m.role === 'assistant'" src="/img/logo.svg" alt="">
             <template v-else>{{ initials }}</template>
           </div>
           <div class="msg-stack">
@@ -413,13 +413,8 @@ function confirmClear(): void {
   border: 2px solid var(--crema);
 }
 .chat-titles { flex: 1; min-width: 0; line-height: 1.1; }
-.chat-title {
-  font-size: 18px; font-weight: 700;
-  letter-spacing: -0.02em;
-  color: var(--fg1);
-  margin: 0;
-}
-.chat-title .ia { color: var(--terracotta-700); }
+.chat-title { margin: 0; display: flex; }
+.chat-title-logo { height: 18px; width: auto; display: block; }
 .chat-subtitle {
   font-size: 12px; color: var(--fg3);
   margin-top: 3px;
@@ -430,19 +425,7 @@ function confirmClear(): void {
   background: var(--oliva);
   display: inline-block;
 }
-.icon-btn {
-  width: 38px; height: 38px; border-radius: 10px;
-  background: var(--pure-white);
-  border: 1px solid var(--border-subtle);
-  display: inline-flex; align-items: center; justify-content: center;
-  cursor: pointer;
-  color: var(--fg2);
-  flex-shrink: 0;
-  transition: background var(--dur) var(--ease-standard), color var(--dur) var(--ease-standard);
-}
-.icon-btn:hover { background: var(--crema-200); color: var(--fg1); }
-.icon-btn:active { transform: scale(0.96); }
-.icon-btn .iconify { width: 18px; height: 18px; }
+/* .icon-btn viene del global components.css */
 
 /* ============ Banner aprendizaje ============ */
 .learn-banner {

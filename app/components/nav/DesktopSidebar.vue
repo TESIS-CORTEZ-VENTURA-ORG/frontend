@@ -25,8 +25,7 @@ const initials = computed(() =>
 <template>
   <aside class="sidebar hidden lg:flex" aria-label="Navegación principal">
     <NuxtLink to="/app" class="brand">
-      <img src="/img/logo-symbol.svg" alt="" width="28" height="28">
-      <span class="brand-name">Gastronom<em>IA</em></span>
+      <img src="/img/gastronomia-logo.svg" alt="GastronomIA" class="brand-logo">
     </NuxtLink>
 
     <nav class="nav-list">
@@ -76,15 +75,11 @@ const initials = computed(() =>
   gap: 24px;
 }
 .brand {
-  display: flex; align-items: center; gap: 10px;
+  display: flex; align-items: center;
   padding: 4px 10px;
   text-decoration: none;
 }
-.brand-name {
-  font-weight: 600; font-size: 17px; letter-spacing: -0.01em;
-  color: var(--fg1);
-}
-.brand-name em { font-style: normal; color: var(--terracotta); }
+.brand-logo { height: 21px; width: auto; display: block; }
 .nav-list { display: flex; flex-direction: column; gap: 2px; }
 .nav-item {
   display: flex; align-items: center; gap: 12px;

@@ -19,7 +19,7 @@ function isActive(item: AppNavItem): boolean {
     >
       <img
         v-if="item.brand"
-        src="/img/logo-symbol.svg"
+        src="/img/logo.svg"
         alt=""
         class="tab-brand-ico"
         width="24"

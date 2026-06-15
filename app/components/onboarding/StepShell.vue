@@ -34,8 +34,7 @@ const TOTAL = 5
 
     <div class="ob-body">
       <div class="ob-brand">
-        <img src="/img/logo-symbol.svg" alt="" width="22" height="22">
-        <span>Gastronom<em>IA</em></span>
+        <img src="/img/gastronomia-logo.svg" alt="GastronomIA" class="ob-brand-logo">
       </div>
       <h1 class="ob-title">{{ props.title }}</h1>
       <p v-if="props.subtitle" class="ob-sub">{{ props.subtitle }}</p>
@@ -88,11 +87,10 @@ const TOTAL = 5
   display: flex; flex-direction: column;
 }
 .ob-brand {
-  display: flex; align-items: center; gap: 8px;
-  font-size: 12.5px; font-weight: 600; color: var(--fg2);
+  display: flex; align-items: center;
   margin-bottom: 14px;
 }
-.ob-brand em { font-style: normal; color: var(--terracotta); }
+.ob-brand-logo { height: 17px; width: auto; display: block; }
 .ob-title {
   font-size: 26px; font-weight: 600;
   letter-spacing: -0.02em; line-height: 1.15;

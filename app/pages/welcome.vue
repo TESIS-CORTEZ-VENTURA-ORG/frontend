@@ -7,8 +7,7 @@ useSeoMeta({ title: 'Bienvenido — GastronomIA' })
     <div class="wl-atmo" aria-hidden="true" />
 
     <main class="wl-body">
-      <img src="/img/logo-symbol.svg" alt="" class="wl-logo" width="64" height="64">
-      <div class="wl-brand">Gastronom<em>IA</em></div>
+      <img src="/img/gastronomia-logo.svg" alt="GastronomIA" class="wl-brand">
       <h1 class="wl-title display">Tu restaurante,<br>rentable.</h1>
       <p class="wl-sub">
         Costea cada plato, anticipa tu demanda y pregúntale a tus
@@ -57,13 +56,10 @@ useSeoMeta({ title: 'Bienvenido — GastronomIA' })
   padding: calc(56px + env(safe-area-inset-top, 0px)) 28px 16px;
   display: flex; flex-direction: column;
 }
-.wl-logo { margin-bottom: 14px; }
 .wl-brand {
-  font-size: 14px; font-weight: 600; color: var(--fg2);
-  letter-spacing: -0.003em;
-  margin-bottom: 22px;
+  height: 34px; width: auto; display: block;
+  margin-bottom: 26px;
 }
-.wl-brand em { font-style: normal; color: var(--terracotta); }
 .wl-title { font-size: clamp(40px, 11vw, 52px); margin: 0; }
 .wl-sub {
   font-size: 15px; line-height: 1.6; color: var(--fg2);
