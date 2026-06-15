@@ -97,7 +97,14 @@ export async function backendFetch<T>(
     // $fetch infiere TypedInternalResponse; la URL es externa (backend) → casteamos a T.
     return data as unknown as T
   } catch (error) {
-    const status = (error as { statusCode?: number }).statusCode ?? 502
-    throw createError({ statusCode: status, statusMessage: 'Error del backend' })
+    const err = error as {
+      statusCode?: number
+      data?: { error?: { message?: string }, message?: string }
+    }
+    const status = err.statusCode ?? 502
+    // Propaga el mensaje del backend (envelope `error.message`) para poder
+    // mostrarlo como toast en pantalla (p. ej. el 409 de borrar-con-hijos).
+    const message = err.data?.error?.message ?? err.data?.message ?? 'Error del backend'
+    throw createError({ statusCode: status, statusMessage: message, data: { message } })
   }
 }
