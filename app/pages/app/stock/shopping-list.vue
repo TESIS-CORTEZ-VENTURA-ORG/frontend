@@ -5,8 +5,8 @@ useSeoMeta({ title: 'Lista de Compras — GastronomIA' })
 const { data: items, refresh } = useShoppingList()
 const patchItem = usePatchShoppingItem()
 const createMovement = useCreateMovement()
+const clearPurchased = useClearPurchased()
 const toast = useToast()
-const { user } = useUserSession()
 
 const expanded = ref<string | null>(null)
 const registering = ref(false)
@@ -36,17 +36,19 @@ async function registerPurchases(): Promise<void> {
   if (checked.value.length === 0 || registering.value) return
   registering.value = true
   try {
-    for (const item of checked.value) {
+    const purchased = [...checked.value]
+    for (const item of purchased) {
       await createMovement.mutateAsync({
         ingredientId: item.ingredientId,
         type: 'purchase',
         qty: item.suggestedQty,
         note: 'Compra desde lista',
-        user: user.value?.name,
       })
     }
+    // La lista no se persiste: limpiamos el estado local de lo comprado.
+    clearPurchased(purchased.map(i => i.ingredientId))
     toast.add({
-      title: `${checked.value.length} compra${checked.value.length > 1 ? 's' : ''} registrada${checked.value.length > 1 ? 's' : ''} en inventario`,
+      title: `${purchased.length} compra${purchased.length > 1 ? 's' : ''} registrada${purchased.length > 1 ? 's' : ''} en inventario`,
       icon: 'i-lucide-check-circle-2',
     })
     await refresh()

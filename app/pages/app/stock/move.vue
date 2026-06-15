@@ -7,7 +7,6 @@ useSeoMeta({ title: 'Movimiento rápido — GastronomIA' })
 const { data: ingredients } = useIngredients()
 const createMovement = useCreateMovement()
 const toast = useToast()
-const { user } = useUserSession()
 
 type Tipo = 'entrada' | 'salida'
 
@@ -109,12 +108,15 @@ async function save(): Promise<void> {
   busy.value = true
   try {
     const motivoName = motivos.value.find(m => m.id === motivo.value)?.name ?? motivo.value
+    const type = TYPE_MAP[motivo.value] ?? 'adjustment'
+    const detail = note.value.trim() ? `${motivoName}: ${note.value.trim()}` : motivoName
     await createMovement.mutateAsync({
       ingredientId: product.value.id,
-      type: TYPE_MAP[motivo.value] ?? 'adjustment',
+      type,
       qty: tipo.value === 'entrada' ? qty.value : -qty.value,
-      note: note.value.trim() ? `${motivoName}: ${note.value.trim()}` : motivoName,
-      user: user.value?.name,
+      note: detail,
+      // La merma exige razón (HU-05-08): usamos el motivo (+ nota) elegido.
+      reason: type === 'waste' ? detail : undefined,
     })
     toast.add({
       title: `${tipo.value === 'entrada' ? 'Entrada' : 'Salida'} registrada`,

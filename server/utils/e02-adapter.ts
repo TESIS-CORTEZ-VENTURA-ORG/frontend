@@ -66,6 +66,9 @@ const marginOf = (sellPrice: number, cost: number): number =>
   sellPrice > 0 ? Math.round(((sellPrice - cost) / sellPrice) * 100) : 0
 
 // ---- Insumos ----
+// El catálogo (E02) ya no gobierna el stock: lo hace Inventario (E05). Este
+// adaptador queda catalog-only (stock/mínimos en 0); el BFF fusiona el stock real
+// desde `GET /api/inventory/stock` en la ruta (`server/api/ingredients/index.get`).
 export function toFrontendIngredient(b: BeIngredient): Ingredient {
   return {
     id: b.id,
@@ -73,10 +76,8 @@ export function toFrontendIngredient(b: BeIngredient): Ingredient {
     category: b.category ?? '',
     unit: b.unit,
     unitCost: num(b.unitCost),
-    // stock/mínimos pertenecen a Inventario (E05, aún no construido) → pendientes.
     stock: 0,
     minStock: 0,
-    stockPending: true,
     updatedAt: b.updatedAt,
   }
 }

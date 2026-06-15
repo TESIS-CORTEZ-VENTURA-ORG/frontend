@@ -18,7 +18,8 @@ const inShopping = computed(() => new Set((shopping.value ?? []).map(s => s.ingr
 type StockStatus = 'ok' | 'low' | 'crit'
 
 function statusOf(i: Ingredient): StockStatus {
-  if (i.stockPending) return 'ok' // stock vive en Inventario (E05): sin falsas alarmas
+  // El backend (E05) ya calcula el estado; lo usamos si vino, con fallback local.
+  if (i.status) return i.status === 'critical' ? 'crit' : i.status
   if (i.minStock <= 0) return 'ok'
   const ratio = i.stock / i.minStock
   if (ratio < 1) return 'crit'
@@ -88,13 +89,11 @@ const shoppingTotal = computed(() =>
 )
 
 function fmtStock(i: Ingredient): string {
-  if (i.stockPending) return '—'
   if (i.unit === 'kg' && i.stock < 1) return `${Math.round(i.stock * 1000)} g`
   return `${i.stock} ${i.unit}`
 }
 
 function fmtMin(i: Ingredient): string {
-  if (i.stockPending) return 'mín. pendiente'
   if (i.unit === 'kg' && i.minStock < 1) return `${Math.round(i.minStock * 1000)} g`
   return `${i.minStock} ${i.unit}`
 }
@@ -225,6 +224,20 @@ async function onImportFile(e: Event): Promise<void> {
         <span class="stk-action-ico neutral" aria-hidden="true"><UIcon name="i-lucide-plus-circle" /></span>
         <span class="stk-action-label">Ingreso Manual</span>
         <span class="stk-action-sub">Movimiento rápido</span>
+      </NuxtLink>
+
+      <NuxtLink to="/app/stock/purchase-orders" class="stk-action">
+        <span class="stk-action-arrow" aria-hidden="true"><UIcon name="i-lucide-arrow-up-right" /></span>
+        <span class="stk-action-ico info" aria-hidden="true"><UIcon name="i-lucide-clipboard-list" /></span>
+        <span class="stk-action-label">Órdenes de Compra</span>
+        <span class="stk-action-sub">Pedidos a proveedor</span>
+      </NuxtLink>
+
+      <NuxtLink to="/app/stock/mermas" class="stk-action">
+        <span class="stk-action-arrow" aria-hidden="true"><UIcon name="i-lucide-arrow-up-right" /></span>
+        <span class="stk-action-ico" style="background: var(--danger-bg); color: var(--danger);" aria-hidden="true"><UIcon name="i-lucide-trash-2" /></span>
+        <span class="stk-action-label">Mermas</span>
+        <span class="stk-action-sub">Pérdidas registradas</span>
       </NuxtLink>
     </section>
 
