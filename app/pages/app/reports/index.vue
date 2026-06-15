@@ -1,759 +1,726 @@
 <script setup lang="ts">
-// /app/reports — Reportes, KPIs y Análisis (E07). Read-only MVP, 3 períodos
-// fijos (Hoy · Semana · Mes). Portado del diseño Reports.html de Claude Design.
-// Gráficos en SVG inline / barras CSS — sin librerías de charting.
+// /app/reports — E07 · Reportes y dashboards (read-only), cableado al backend NestJS
+// vía el BFF (server/api/reports/**). Sin librería de charting: barras CSS / SVG inline
+// (echarts no está en el bundle). Toda la moneda llega como string PEN → se formatea
+// con formatPEN. Gating por rol: staff solo ve el dashboard del cajero (read Sale);
+// el resto es info de gestión (read Report) → owner/manager.
+import {
+  presetWindow,
+  currentPeriod,
+  useCashierDashboard,
+  useManagerDashboard,
+  useAdminDashboard,
+  useSalesReport,
+  useParetoDishes,
+  useInventoryReport,
+  useFoodCostReport,
+  useWasteReport,
+  useReportCsv,
+  type SalesGroupBy,
+  type DateWindow,
+} from '~/composables/use-reports'
+
 definePageMeta({ layout: 'app' })
 useSeoMeta({ title: 'Reportes — GastronomIA' })
 
+const { user } = useUserSession()
 const toast = useToast()
-const router = useRouter()
 
-type PeriodKey = 'hoy' | 'semana' | 'mes'
-type MetricId = 'ventas' | 'pedidos' | 'margen'
+// owner/manager ven todo; staff solo el dashboard del cajero (el backend 403ea el resto).
+const canManage = computed(() => user.value?.role === 'owner' || user.value?.role === 'manager')
 
-interface Kpi { val: string, delta: string, note?: string }
-interface Dish { id: string, name: string, units: number, margin: number }
-interface PeriodData {
-  label: string
-  subtitle: string
-  summary: string
-  kpis: { ventas: Kpi, ticket: Kpi, margen: Kpi, pedidos: Kpi }
-  spark: number[]
-  chart: { labels: string[], ventas: number[], pedidos: number[], margen: number[] }
-  peakLabel: string
-  dishes: Dish[]
-  donutCenter: string
-}
-
-/* ============ DATA (mock, coherente con dashboard + chat) ============ */
-const PERIODS: Record<PeriodKey, PeriodData> = {
-  hoy: {
-    label: 'Hoy',
-    subtitle: 'Hoy, sábado 14 de junio',
-    summary:
-      '📊 Hoy llevas <b>S/ 3,200</b> — vas camino a tu <b>mejor sábado</b> del mes. '
-      + 'El almuerzo (1–3 PM) ya concentra el <span class="hl">52%</span> de las ventas. '
-      + 'El <b>Ceviche Clásico</b> encabeza con 11 platos, pero su margen sigue golpeado '
-      + '(<b>18%</b>) por el alza del limón. Subirle S/ 2 te recupera ~S/ 22 hoy.',
-    kpis: {
-      ventas: { val: '3,200', delta: '+18%', note: 'vs ayer' },
-      ticket: { val: '92', delta: '+6%', note: 'vs ayer' },
-      margen: { val: '60%', delta: 'En meta' },
-      pedidos: { val: '38', delta: '+12%', note: '≈ 95 comensales' },
-    },
-    spark: [0.32, 0.5, 0.42, 0.66, 0.55, 0.82, 1],
-    chart: {
-      labels: ['12p', '1p', '2p', '3p', '5p', '7p', '8p'],
-      ventas: [380, 920, 760, 210, 160, 420, 350],
-      pedidos: [4, 11, 9, 3, 2, 5, 4],
-      margen: [58, 60, 61, 59, 57, 62, 60],
-    },
-    peakLabel: 'Tu mejor franja hoy: 1–3 PM (almuerzo).',
-    dishes: [
-      { id: 'rec-ceviche-clasico', name: 'Ceviche Clásico', units: 11, margin: 18 },
-      { id: 'rec-lomo-saltado', name: 'Lomo Saltado', units: 8, margin: 55 },
-      { id: 'rec-pisco-sour', name: 'Pisco Sour', units: 7, margin: 72 },
-      { id: 'rec-chicha-morada', name: 'Chicha Morada 1L', units: 6, margin: 68 },
-      { id: 'rec-tiradito', name: 'Tiradito', units: 4, margin: 48 },
-    ],
-    donutCenter: 'S/ 3.2k',
-  },
-
-  semana: {
-    label: 'Semana',
-    subtitle: 'Semana del 9 al 15 de junio',
-    summary:
-      '📊 Vendiste <b>S/ 14,800</b> esta semana, un <span class="hl">8% más</span> que la '
-      + 'anterior. El sábado fue tu mejor día (<b>S/ 3,200</b>) y el almuerzo (1–3 PM) concentró el '
-      + '<b> 38%</b> de tus ventas. El <b>Ceviche Clásico</b> sigue siendo tu estrella (47 platos), '
-      + 'pero su margen cayó a <b>18%</b> por el alza del limón. Subirle S/ 2 recuperaría '
-      + '~S/ 94 de margen esta semana.',
-    kpis: {
-      ventas: { val: '14,800', delta: '+8%', note: 'vs sem. ant.' },
-      ticket: { val: '87', delta: '+4%', note: 'vs sem. ant.' },
-      margen: { val: '62%', delta: 'Top 25% del rubro' },
-      pedidos: { val: '170', delta: '+6%', note: '≈ 420 comensales' },
-    },
-    spark: [0.45, 0.52, 0.55, 0.62, 0.78, 1, 0.4],
-    chart: {
-      labels: ['L', 'M', 'X', 'J', 'V', 'S', 'D'],
-      ventas: [1650, 1820, 1900, 2100, 2680, 3200, 1450],
-      pedidos: [19, 21, 22, 24, 31, 38, 15],
-      margen: [60, 61, 62, 63, 64, 62, 60],
-    },
-    peakLabel: 'Tu día pico fue el sábado (S/ 3,200).',
-    dishes: [
-      { id: 'rec-ceviche-clasico', name: 'Ceviche Clásico', units: 47, margin: 18 },
-      { id: 'rec-lomo-saltado', name: 'Lomo Saltado', units: 32, margin: 55 },
-      { id: 'rec-pisco-sour', name: 'Pisco Sour', units: 28, margin: 72 },
-      { id: 'rec-chicha-morada', name: 'Chicha Morada 1L', units: 25, margin: 68 },
-      { id: 'rec-tiradito', name: 'Tiradito', units: 18, margin: 48 },
-    ],
-    donutCenter: 'S/ 14.8k',
-  },
-
-  mes: {
-    label: 'Mes',
-    subtitle: 'Junio 2026 · al día 15',
-    summary:
-      '📊 En lo que va de junio vendiste <b>S/ 58,500</b>, un <span class="hl">11% más</span> '
-      + 'que mayo. Los fines de semana aportan el <b>46%</b> de tu facturación y el '
-      + '<b> Ceviche Clásico</b> se mantiene como tu plato estrella (198 platos). Su margen '
-      + 'promedio del mes (<b>20%</b>) sigue por debajo de tu meta por el costo del limón.',
-    kpis: {
-      ventas: { val: '58,500', delta: '+11%', note: 'vs mayo' },
-      ticket: { val: '84', delta: '+2%', note: 'vs mayo' },
-      margen: { val: '61%', delta: 'Top 25% del rubro' },
-      pedidos: { val: '695', delta: '+9%', note: '≈ 1,720 comensales' },
-    },
-    spark: [0.55, 0.6, 0.58, 0.7, 0.72, 0.85, 1],
-    chart: {
-      labels: ['Sem 1', 'Sem 2', 'Sem 3', 'Sem 4'],
-      ventas: [12100, 13400, 14800, 18200],
-      pedidos: [150, 158, 170, 217],
-      margen: [60, 61, 62, 61],
-    },
-    peakLabel: 'Tu mejor semana fue la 4 (S/ 18,200).',
-    dishes: [
-      { id: 'rec-ceviche-clasico', name: 'Ceviche Clásico', units: 198, margin: 20 },
-      { id: 'rec-lomo-saltado', name: 'Lomo Saltado', units: 142, margin: 55 },
-      { id: 'rec-pisco-sour', name: 'Pisco Sour', units: 120, margin: 72 },
-      { id: 'rec-chicha-morada', name: 'Chicha Morada 1L', units: 104, margin: 68 },
-      { id: 'rec-tiradito', name: 'Tiradito', units: 76, margin: 48 },
-    ],
-    donutCenter: 'S/ 58.5k',
-  },
-}
-
-interface MixSlice { label: string, pct: number, color: string }
-const CATEGORY_MIX: MixSlice[] = [
-  { label: 'Fondos', pct: 48, color: 'var(--terracotta)' },
-  { label: 'Bebidas', pct: 22, color: 'var(--mostaza)' },
-  { label: 'Entradas', pct: 20, color: 'var(--oliva)' },
-  { label: 'Postres', pct: 10, color: 'var(--espresso-400)' },
+/* ============ Tabs ============ */
+type TabId = 'dashboard' | 'ventas' | 'pareto' | 'inventario' | 'foodcost' | 'mermas'
+interface Tab { id: TabId, label: string, icon: string, manageOnly?: boolean }
+const ALL_TABS: Tab[] = [
+  { id: 'dashboard', label: 'Dashboard', icon: 'i-lucide-layout-dashboard' },
+  { id: 'ventas', label: 'Ventas', icon: 'i-lucide-trending-up', manageOnly: true },
+  { id: 'pareto', label: 'Platos', icon: 'i-lucide-trophy', manageOnly: true },
+  { id: 'inventario', label: 'Inventario', icon: 'i-lucide-package', manageOnly: true },
+  { id: 'foodcost', label: 'Food cost', icon: 'i-lucide-percent', manageOnly: true },
+  { id: 'mermas', label: 'Mermas', icon: 'i-lucide-trash-2', manageOnly: true },
 ]
+const tabs = computed(() => ALL_TABS.filter(t => !t.manageOnly || canManage.value))
+const tab = ref<TabId>('dashboard')
 
-const PAYMENT_MIX: MixSlice[] = [
-  { label: 'Yape', pct: 42, color: 'var(--terracotta)' },
-  { label: 'Efectivo', pct: 31, color: 'var(--oliva)' },
-  { label: 'Tarjeta', pct: 27, color: 'var(--mostaza)' },
+/* ============ Date-range presets (compartido por Ventas/Pareto/Mermas) ============ */
+type PresetKey = 'hoy' | 'semana' | 'mes'
+const PRESETS: { key: PresetKey, label: string }[] = [
+  { key: 'hoy', label: 'Hoy' },
+  { key: 'semana', label: 'Esta semana' },
+  { key: 'mes', label: 'Este mes' },
 ]
-
-const HEAT_ROWS = ['12–3 PM', '3–6 PM', '6–9 PM', '9–11 PM']
-const HEAT_COLS = ['L', 'M', 'X', 'J', 'V', 'S', 'D']
-const HEAT: number[][] = [
-  [0.70, 0.74, 0.78, 0.80, 0.86, 1.00, 0.58],
-  [0.28, 0.30, 0.34, 0.38, 0.46, 0.56, 0.40],
-  [0.40, 0.42, 0.46, 0.52, 0.80, 0.92, 0.66],
-  [0.14, 0.16, 0.18, 0.24, 0.50, 0.62, 0.32],
-]
-
-const METRICS: { id: MetricId, label: string }[] = [
-  { id: 'ventas', label: 'Ventas' },
-  { id: 'pedidos', label: 'Pedidos' },
-  { id: 'margen', label: 'Margen' },
-]
-
-const SHARE_ITEMS = [
-  { icon: 'i-lucide-download', label: 'Descargar PDF' },
-  { icon: 'i-lucide-mail', label: 'Enviar por correo' },
-  { icon: 'i-lucide-copy', label: 'Copiar resumen' },
-]
+const preset = ref<PresetKey>('semana')
+const window = computed<DateWindow>(() => presetWindow(preset.value))
+const rangeLabel = computed(() => {
+  const fromDay = window.value.from.slice(0, 10)
+  const toDay = window.value.to.slice(0, 10)
+  return fromDay === toDay ? fmtDay(fromDay) : `${fmtDay(fromDay)} – ${fmtDay(toDay)}`
+})
 
 /* ============ helpers ============ */
-function fmtMoney(n: number): string {
-  return `S/ ${n.toLocaleString('es-PE')}`
+const num = (s: string | undefined | null): number => Number(s ?? 0)
+function fmtDay(dayKey: string): string {
+  return new Date(`${dayKey}T12:00:00Z`).toLocaleDateString('es-PE', { day: 'numeric', month: 'short' })
 }
-function fmtMetric(id: MetricId, v: number): string {
-  if (id === 'ventas') return fmtMoney(v)
-  if (id === 'pedidos') return `${v} ${v === 1 ? 'pedido' : 'pedidos'}`
-  return `${v}%`
+function fmtPct(s: string | number): string {
+  return `${Number(s).toFixed(1)}%`
 }
-function marginClass(m: number): 'good' | 'mid' | 'bad' {
-  return m >= 50 ? 'good' : m >= 30 ? 'mid' : 'bad'
+function abcClassLabel(c: 'A' | 'B' | 'C'): string {
+  return c === 'A' ? 'Estrella (A)' : c === 'B' ? 'Soporte (B)' : 'Cola (C)'
 }
-
-/* ============ state ============ */
-const periodKey = ref<PeriodKey>('semana')
-const data = computed<PeriodData>(() => PERIODS[periodKey.value])
-
-const metric = ref<MetricId>('ventas')
-const activeBar = ref<number | null>(null)
-const scrolled = ref(false)
-const grown = ref(false)
-
-const showShare = ref(false)
-const showCustom = ref(false)
-
-/* ----- sales chart derived ----- */
-const series = computed(() => data.value.chart[metric.value])
-const chartLabels = computed(() => data.value.chart.labels)
-const maxVal = computed(() => Math.max(...series.value))
-const peakIdx = computed(() => series.value.indexOf(maxVal.value))
-const avgPct = computed(() => {
-  const s = series.value
-  const avg = s.reduce((a, b) => a + b, 0) / s.length
-  return (avg / maxVal.value) * 100
-})
-
-/* ----- top dishes ----- */
-const maxUnits = computed(() => data.value.dishes[0]?.units ?? 1)
-
-/* ----- donut (category mix) — estático ----- */
-const DONUT = (() => {
-  const size = 132
-  const stroke = 22
-  const r = (size - stroke) / 2
-  const c = 2 * Math.PI * r
-  let acc = 0
-  const segs = CATEGORY_MIX.map((s) => {
-    const len = (s.pct / 100) * c
-    const gap = 2
-    const dash = `${Math.max(0, len - gap)} ${c - len + gap}`
-    const off = -acc
-    acc += len
-    return { color: s.color, dash, off }
-  })
-  return { size, r, stroke, segs }
-})()
-
-/* ----- forecast band (P10/P90), proyección próxima semana — estático ----- */
-const FORECAST = (() => {
-  const W = 300
-  const H = 110
-  const pad = 8
-  const center = [2050, 2150, 2250, 2400, 2700, 3100, 2850]
-  const lower = center.map(v => v * 0.91)
-  const upper = center.map(v => v * 1.085)
-  const all = [...lower, ...upper]
-  const min = Math.min(...all) * 0.96
-  const max = Math.max(...all) * 1.02
-  const x = (i: number): number => pad + (i / (center.length - 1)) * (W - pad * 2)
-  const y = (v: number): number => H - pad - ((v - min) / (max - min)) * (H - pad * 2)
-  const upPts = upper.map((v, i) => `${x(i)},${y(v)}`)
-  const lowPts = lower.map((v, i) => `${x(i)},${y(v)}`).reverse()
-  const areaPath = `M ${upPts.join(' L ')} L ${lowPts.join(' L ')} Z`
-  const centerPts = center.map((v, i) => `${x(i)},${y(v)}`).join(' ')
-  return { W, H, areaPath, centerPts }
-})()
-
-function heatAlpha(v: number): number {
-  return 0.10 + v * 0.82
+function foodCostClass(pct: number, target: number): 'good' | 'mid' | 'bad' {
+  if (pct <= target) return 'good'
+  if (pct <= target * 1.25) return 'mid'
+  return 'bad'
+}
+function statusClass(s: 'ok' | 'low' | 'critical'): 'ok' | 'low' | 'crit' {
+  return s === 'critical' ? 'crit' : s
+}
+function statusLabel(s: 'ok' | 'low' | 'critical'): string {
+  return s === 'critical' ? 'Crítico' : s === 'low' ? 'Bajo' : 'OK'
 }
 
-const chartUnit = computed(() =>
-  data.value.label === 'Mes' ? 'semana' : data.value.label === 'Hoy' ? 'franja' : 'día')
+/* ============ Queries (gateadas por rol) ============ */
+// Solo se consulta la del tab activo (enabled) → menos llamadas y respeta el 403 de staff.
+const onDashboard = computed(() => tab.value === 'dashboard')
 
-/* ============ interactions ============ */
-function goBack(): void {
-  // Prioriza el historial real (igual que ScreenHeader): vuelve a donde vino el
-  // usuario; `/app` es solo respaldo en deep-link / recarga.
-  const hasInAppHistory = Boolean(router.options.history.state?.back)
-  if (hasInAppHistory) router.back()
-  else void navigateTo('/app')
-}
+// Dashboard del cajero: visible a todos (incluido staff) cuando está en el tab.
+const cashier = useCashierDashboard(() => onDashboard.value && !canManage.value)
+// Dashboards de gestión: owner/manager. El admin (ejecutivo) para owner; el operativo para manager.
+const isOwner = computed(() => user.value?.role === 'owner')
+const admin = useAdminDashboard(() => onDashboard.value && isOwner.value)
+const manager = useManagerDashboard(() => onDashboard.value && canManage.value && !isOwner.value)
 
-function toggleBar(i: number): void {
-  activeBar.value = activeBar.value === i ? null : i
-}
+const salesGroupBy = ref<SalesGroupBy>('day')
+const sales = useSalesReport(window, salesGroupBy, () => tab.value === 'ventas' && canManage.value)
+const pareto = useParetoDishes(window, () => tab.value === 'pareto' && canManage.value)
+const inventory = useInventoryReport(() => tab.value === 'inventario' && canManage.value)
 
-function goRecipe(id: string): void {
-  void navigateTo(`/app/recipes/${id}`)
-}
+const period = ref(currentPeriod())
+const foodcost = useFoodCostReport(period, () => tab.value === 'foodcost' && canManage.value)
 
-function soon(): void {
-  toast.add({ title: 'Próximamente disponible', icon: 'i-lucide-info' })
-}
+const waste = useWasteReport(window, () => tab.value === 'mermas' && canManage.value)
 
-function notifyForecast(): void {
-  toast.add({ title: 'Te avisaremos cuando el forecast IA esté disponible', icon: 'i-lucide-bell' })
-}
+/* ============ Derived (charts) ============ */
+// Serie de ventas del admin: 7 días (barras CSS).
+const adminMaxRevenue = computed(() =>
+  Math.max(1, ...(admin.data.value?.salesByDay7d ?? []).map(d => num(d.revenue))))
 
-function shareItem(close: () => void): void {
-  close()
-  soon()
-}
-
-/* Cambiar período: reinicia métrica/selección y reanima barras y rankings. */
-watch(periodKey, () => {
-  metric.value = 'ventas'
-  activeBar.value = null
-  if (import.meta.client) {
-    grown.value = false
-    requestAnimationFrame(() => { grown.value = true })
+// Serie del reporte de ventas (barras CSS, normalizadas al máximo de revenue).
+const salesSeries = computed(() => sales.data.value?.series ?? [])
+const salesMax = computed(() => Math.max(1, ...salesSeries.value.map(p => num(p.revenue))))
+function seriesKeyLabel(key: string): string {
+  // groupBy=day → YYYY-MM-DD; method/docType → etiqueta directa.
+  if (/^\d{4}-\d{2}-\d{2}$/.test(key)) return fmtDay(key)
+  const map: Record<string, string> = {
+    cash: 'Efectivo', card: 'Tarjeta', yape: 'Yape', plin: 'Plin', boleta: 'Boleta', factura: 'Factura',
   }
-})
-
-watch(metric, () => { activeBar.value = null })
-
-function onScroll(): void {
-  scrolled.value = window.scrollY > 8
+  return map[key] ?? key
 }
 
-onMounted(() => {
-  window.addEventListener('scroll', onScroll, { passive: true })
-  requestAnimationFrame(() => { grown.value = true })
-})
-onBeforeUnmount(() => window.removeEventListener('scroll', onScroll))
+const GROUP_OPTS: { id: SalesGroupBy, label: string }[] = [
+  { id: 'day', label: 'Por día' },
+  { id: 'method', label: 'Por método' },
+  { id: 'docType', label: 'Por comprobante' },
+]
+
+// Pareto: ancho de barra normalizado al primer (mayor) revenue.
+const paretoMax = computed(() =>
+  Math.max(1, ...(pareto.data.value?.items ?? []).map(i => num(i.revenue))))
+
+// Mermas: ancho de barra por razón normalizado al mayor costo.
+const wasteReasonMax = computed(() =>
+  Math.max(1, ...(waste.data.value?.byReason ?? []).map(r => num(r.cost))))
+
+/* ============ CSV export (HU-07-10) ============ */
+const downloadCsv = useReportCsv()
+const exporting = ref(false)
+async function exportCsv(report: 'sales' | 'inventory' | 'food-cost' | 'waste'): Promise<void> {
+  if (exporting.value) return
+  exporting.value = true
+  try {
+    const query: Record<string, string> = {}
+    if (report === 'sales') Object.assign(query, { from: window.value.from, to: window.value.to, groupBy: salesGroupBy.value })
+    if (report === 'waste') Object.assign(query, { from: window.value.from, to: window.value.to })
+    if (report === 'food-cost') Object.assign(query, { period: period.value })
+    await downloadCsv(report, query)
+    toast.add({ title: 'CSV descargado', icon: 'i-lucide-download' })
+  }
+  catch (e) {
+    toast.add({ title: errorMessage(e, 'No se pudo exportar el CSV'), icon: 'i-lucide-alert-triangle', color: 'error' })
+  }
+  finally {
+    exporting.value = false
+  }
+}
+
+function periodLabel(p: string): string {
+  const [y, m] = p.split('-')
+  const date = new Date(Number(y), Number(m) - 1, 1)
+  return date.toLocaleDateString('es-PE', { month: 'long', year: 'numeric' })
+}
 </script>
 
 <template>
   <div class="rep">
-    <!-- ============ 1 + 2. TOP REGION (header + selector, sticky) ============ -->
-    <div class="rep-top" :class="{ scrolled }">
-      <!-- 1. Header -->
-      <header id="reports-header" class="rep-hdr">
-        <button class="icon-btn" aria-label="Volver" @click="goBack">
-          <UIcon name="i-lucide-arrow-left" />
-        </button>
-        <div class="rep-hdr-center">
-          <h1 class="rep-hdr-title">Reportes</h1>
-          <div class="rep-hdr-sub">{{ data.subtitle }}</div>
-        </div>
-        <button class="icon-btn" aria-label="Compartir reporte" @click="showShare = true">
-          <UIcon name="i-lucide-share-2" />
-        </button>
-      </header>
+    <UiScreenHeader title="Reportes" :subtitle="canManage ? 'KPIs, ventas y análisis' : 'Caja del día'" back="/app/menu" />
 
-      <!-- 2. Period selector -->
-      <div id="period-selector" class="rep-periods" role="tablist" aria-label="Período del reporte">
-        <button
-          v-for="(p, k) in PERIODS"
-          :key="k"
-          role="tab"
-          :aria-selected="periodKey === k"
-          class="rep-period"
-          :class="{ active: periodKey === k }"
-          @click="periodKey = k as PeriodKey"
-        >
-          {{ p.label }}
-        </button>
-        <button
-          role="tab"
-          aria-selected="false"
-          class="rep-period locked"
-          aria-label="Rango personalizado, próximamente"
-          @click="showCustom = true"
-        >
-          <UIcon name="i-lucide-lock" /> Personalizado
-        </button>
-      </div>
-    </div>
+    <!-- Tabs -->
+    <nav class="rep-tabs" role="tablist" aria-label="Secciones de reportes">
+      <button
+        v-for="t in tabs"
+        :key="t.id"
+        role="tab"
+        :aria-selected="tab === t.id"
+        class="rep-tab"
+        :class="{ active: tab === t.id }"
+        @click="tab = t.id"
+      >
+        <UIcon :name="t.icon" />
+        <span>{{ t.label }}</span>
+      </button>
+    </nav>
 
     <div class="rep-content">
-      <!-- ============ 3. AI SUMMARY ============ -->
-      <section id="ai-summary" class="rep-ai" aria-label="Resumen narrativo GastronomIA">
-        <div class="rep-ai-head">
-          <div class="rep-ai-avatar" aria-hidden="true"><UIcon name="i-lucide-bot" /></div>
-          <div class="rep-ai-label">
-            Resumen GastronomIA <span class="sep">·</span><span class="ai-tag">IA</span>
-          </div>
-        </div>
-        <!-- eslint-disable-next-line vue/no-v-html — contenido estático de confianza -->
-        <p class="rep-ai-text" v-html="data.summary" />
-        <button class="rep-ai-cta" @click="goRecipe('rec-ceviche-clasico')">
-          <UIcon name="i-lucide-tag" /> Ajustar precio del Ceviche
-        </button>
-        <div class="rep-ai-foot">
-          <UIcon name="i-lucide-sparkles" /> Generado hace 4 min · se actualiza cada día
-        </div>
-      </section>
-
-      <!-- ============ 4. KPI GRID ============ -->
-      <section id="kpi-grid" class="rep-kpi-grid" aria-label="Indicadores principales">
-        <div class="rep-kpi">
-          <div class="rep-kpi-eyebrow">Ventas</div>
-          <div class="rep-kpi-val"><span class="cur">S/</span>{{ data.kpis.ventas.val }}</div>
-          <div class="rep-kpi-delta up">
-            <UIcon name="i-lucide-arrow-up-right" /> {{ data.kpis.ventas.delta }}
-            <span class="muted">· {{ data.kpis.ventas.note }}</span>
-          </div>
-          <div class="rep-kpi-spark" aria-hidden="true">
-            <span
-              v-for="(h, i) in data.spark"
-              :key="i"
-              :class="{ on: i === data.spark.length - 1 }"
-              :style="{ height: `${Math.max(8, h * 100)}%` }"
-            />
-          </div>
-        </div>
-
-        <div class="rep-kpi">
-          <div class="rep-kpi-eyebrow">Ticket promedio</div>
-          <div class="rep-kpi-val"><span class="cur">S/</span>{{ data.kpis.ticket.val }}</div>
-          <div class="rep-kpi-delta up">
-            <UIcon name="i-lucide-arrow-up-right" /> {{ data.kpis.ticket.delta }}
-            <span class="muted">· {{ data.kpis.ticket.note }}</span>
-          </div>
-          <div class="rep-kpi-spark" aria-hidden="true">
-            <span
-              v-for="(h, i) in data.spark"
-              :key="i"
-              :class="{ on: i === data.spark.length - 1 }"
-              :style="{ height: `${Math.max(8, h * 100)}%` }"
-            />
-          </div>
-        </div>
-
-        <div class="rep-kpi">
-          <div class="rep-kpi-eyebrow">Margen promedio</div>
-          <div class="rep-kpi-val accent">{{ data.kpis.margen.val }}</div>
-          <div class="rep-kpi-delta flat">
-            <UIcon name="i-lucide-award" /> {{ data.kpis.margen.delta }}
-          </div>
-          <div class="rep-kpi-spark" aria-hidden="true">
-            <span
-              v-for="(h, i) in data.spark"
-              :key="i"
-              :class="{ on: i === data.spark.length - 1 }"
-              :style="{ height: `${Math.max(8, h * 100)}%` }"
-            />
-          </div>
-        </div>
-
-        <div class="rep-kpi">
-          <div class="rep-kpi-eyebrow">Pedidos</div>
-          <div class="rep-kpi-val">{{ data.kpis.pedidos.val }}</div>
-          <div class="rep-kpi-delta up">
-            <UIcon name="i-lucide-arrow-up-right" /> {{ data.kpis.pedidos.delta }}
-          </div>
-          <div class="rep-kpi-meta">{{ data.kpis.pedidos.note }}</div>
-        </div>
-      </section>
-
-      <!-- ============ 5. SALES CHART ============ -->
-      <section id="sales-chart" class="rep-card" aria-label="Ventas por período">
-        <div class="rep-card-head">
-          <div class="rep-card-title">Ventas por {{ chartUnit }}</div>
-          <div class="rep-metric-toggle" role="tablist" aria-label="Métrica del gráfico">
-            <button
-              v-for="m in METRICS"
-              :key="m.id"
-              role="tab"
-              :aria-selected="metric === m.id"
-              :class="{ active: metric === m.id }"
-              @click="metric = m.id"
-            >
-              {{ m.label }}
-            </button>
-          </div>
-        </div>
-
-        <div class="rep-chart">
-          <div class="rep-chart-avg" :style="{ bottom: `calc(${avgPct}% * (148 / 168) + 20px)` }">
-            <span class="lbl">Prom</span>
-          </div>
-          <div class="rep-bars">
-            <div
-              v-for="(v, i) in series"
-              :key="i"
-              class="rep-bar-col"
-              :class="{ peak: i === peakIdx, active: activeBar === i }"
-              role="button"
-              tabindex="0"
-              :aria-label="`${chartLabels[i]}: ${fmtMetric(metric, v)}`"
-              @click="toggleBar(i)"
-              @keydown.enter.prevent="toggleBar(i)"
-              @keydown.space.prevent="toggleBar(i)"
-            >
-              <div v-if="activeBar === i" class="rep-tooltip">{{ fmtMetric(metric, v) }}</div>
-              <div class="rep-bar" :style="{ height: grown ? `${Math.max(3, (v / maxVal) * 100)}%` : '0%' }" />
-              <div class="rep-bar-lbl">{{ chartLabels[i] }}</div>
+      <!-- ============================ DASHBOARD ============================ -->
+      <template v-if="tab === 'dashboard'">
+        <!-- ---- Cajero (staff) ---- -->
+        <template v-if="!canManage">
+          <RepError v-if="cashier.error.value" @retry="cashier.refresh()" />
+          <RepLoading v-else-if="cashier.isLoading.value && !cashier.data.value" />
+          <template v-else-if="cashier.data.value">
+            <div class="rep-eyebrow">Caja de hoy</div>
+            <div class="rep-stat-grid">
+              <div class="rep-stat accent">
+                <span class="rep-stat-k">Total cobrado</span>
+                <span class="rep-stat-v"><span class="cur">S/</span>{{ num(cashier.data.value.totalCollected).toLocaleString('es-PE') }}</span>
+                <span class="rep-stat-meta">{{ cashier.data.value.salesCount }} ticket{{ cashier.data.value.salesCount === 1 ? '' : 's' }}</span>
+              </div>
+              <div class="rep-stat">
+                <span class="rep-stat-k">Ticket promedio</span>
+                <span class="rep-stat-v">{{ formatPEN(num(cashier.data.value.avgTicket)) }}</span>
+              </div>
+              <div class="rep-stat">
+                <span class="rep-stat-k">Anulaciones</span>
+                <span class="rep-stat-v">{{ cashier.data.value.voidCount }}</span>
+              </div>
             </div>
-          </div>
-        </div>
 
-        <div class="rep-chart-peaklabel">
-          <UIcon name="i-lucide-trending-up" /> {{ data.peakLabel }}
-        </div>
-      </section>
+            <section class="rep-card">
+              <div class="rep-card-head"><div class="rep-card-title">Por método de pago</div></div>
+              <div class="rep-methods">
+                <div v-for="m in [
+                  { k: 'Efectivo', v: cashier.data.value.byMethod.cash, c: 'var(--oliva)' },
+                  { k: 'Tarjeta', v: cashier.data.value.byMethod.card, c: 'var(--mostaza)' },
+                  { k: 'Yape', v: cashier.data.value.byMethod.yape, c: 'var(--terracotta)' },
+                  { k: 'Plin', v: cashier.data.value.byMethod.plin, c: 'var(--espresso-400)' },
+                ]" :key="m.k" class="rep-method">
+                  <span class="rep-method-dot" :style="{ background: m.c }" />
+                  <span class="rep-method-k">{{ m.k }}</span>
+                  <span class="rep-method-v">{{ formatPEN(num(m.v)) }}</span>
+                </div>
+              </div>
+            </section>
+          </template>
+        </template>
 
-      <!-- ============ 6. TOP DISHES ============ -->
-      <section id="top-dishes" class="rep-card" aria-label="Platos más vendidos">
-        <div class="rep-card-head">
-          <div class="rep-card-title">🏆 Más vendidos</div>
-          <button class="rep-card-link" @click="navigateTo('/app/recipes')">
-            Ver todos <UIcon name="i-lucide-arrow-right" />
-          </button>
-        </div>
-
-        <button
-          v-for="(d, i) in data.dishes"
-          :key="d.id"
-          class="rep-dish"
-          :class="{ first: i === 0 }"
-          :aria-label="`${i + 1}. ${d.name}, ${d.units} unidades, margen ${d.margin}%`"
-          @click="goRecipe(d.id)"
-        >
-          <span class="rep-dish-pos" :class="{ first: i === 0 }">{{ i + 1 }}</span>
-          <span class="rep-dish-main">
-            <span class="rep-dish-name">{{ d.name }}</span>
-            <span class="rep-dish-track">
-              <span class="rep-dish-fill" :style="{ width: grown ? `${(d.units / maxUnits) * 100}%` : '0%' }" />
-            </span>
-          </span>
-          <span class="rep-dish-right">
-            <span class="rep-dish-units">{{ d.units }} <small>und</small></span>
-            <span class="rep-margin-chip" :class="marginClass(d.margin)">{{ d.margin }}%</span>
-          </span>
-        </button>
-      </section>
-
-      <!-- ============ 7. CATEGORY MIX (donut) ============ -->
-      <section id="category-mix" class="rep-card" aria-label="Mix por categoría">
-        <div class="rep-card-head">
-          <div class="rep-card-title">Mix por categoría</div>
-        </div>
-        <div class="rep-donut-wrap">
-          <div class="rep-donut" aria-hidden="true">
-            <svg :width="DONUT.size" :height="DONUT.size" :viewBox="`0 0 ${DONUT.size} ${DONUT.size}`">
-              <circle
-                v-for="(s, i) in DONUT.segs"
-                :key="i"
-                :cx="DONUT.size / 2"
-                :cy="DONUT.size / 2"
-                :r="DONUT.r"
-                fill="none"
-                :stroke="s.color"
-                :stroke-width="DONUT.stroke"
-                :stroke-dasharray="s.dash"
-                :stroke-dashoffset="s.off"
-                stroke-linecap="butt"
-                :transform="`rotate(-90 ${DONUT.size / 2} ${DONUT.size / 2})`"
-              />
-            </svg>
-            <div class="rep-donut-center">
-              <span class="v">{{ data.donutCenter }}</span>
-              <span class="k">Total</span>
+        <!-- ---- Admin / owner (ejecutivo) ---- -->
+        <template v-else-if="isOwner">
+          <RepError v-if="admin.error.value" @retry="admin.refresh()" />
+          <RepLoading v-else-if="admin.isLoading.value && !admin.data.value" />
+          <template v-else-if="admin.data.value">
+            <div class="rep-eyebrow">Resumen ejecutivo · hoy</div>
+            <div class="rep-stat-grid">
+              <div class="rep-stat accent">
+                <span class="rep-stat-k">Ingresos hoy</span>
+                <span class="rep-stat-v"><span class="cur">S/</span>{{ num(admin.data.value.revenueToday).toLocaleString('es-PE') }}</span>
+                <span class="rep-stat-meta">{{ admin.data.value.ordersToday }} pedidos · ticket {{ formatPEN(num(admin.data.value.avgTicket)) }}</span>
+              </div>
+              <div class="rep-stat">
+                <span class="rep-stat-k">Ingresos 7 días</span>
+                <span class="rep-stat-v">{{ formatPEN(num(admin.data.value.revenue7d)) }}</span>
+              </div>
+              <div class="rep-stat">
+                <span class="rep-stat-k">Margen bruto</span>
+                <span class="rep-stat-v accent-fg">{{ fmtPct(admin.data.value.grossMarginPct) }}</span>
+              </div>
+              <div class="rep-stat">
+                <span class="rep-stat-k">Stock bajo</span>
+                <span class="rep-stat-v" :class="{ 'danger-fg': admin.data.value.lowStockCount > 0 }">{{ admin.data.value.lowStockCount }}</span>
+                <NuxtLink v-if="admin.data.value.lowStockCount > 0" to="/app/stock" class="rep-stat-link">Ver insumos</NuxtLink>
+              </div>
             </div>
-          </div>
-          <div class="rep-legend">
-            <div v-for="s in CATEGORY_MIX" :key="s.label" class="rep-legend-row">
-              <span class="rep-legend-dot" :style="{ background: s.color }" />
-              <span class="rep-legend-label">{{ s.label }}</span>
-              <span class="rep-legend-val">{{ s.pct }}%</span>
+
+            <section class="rep-card">
+              <div class="rep-card-head"><div class="rep-card-title">Ventas · últimos 7 días</div></div>
+              <div v-if="num(admin.data.value.revenue7d) > 0" class="rep-chart">
+                <div class="rep-bars">
+                  <div
+                    v-for="d in admin.data.value.salesByDay7d"
+                    :key="d.day"
+                    class="rep-bar-col"
+                    :aria-label="`${fmtDay(d.day)}: ${formatPEN(num(d.revenue))}`"
+                  >
+                    <div class="rep-bar" :style="{ height: `${Math.max(3, (num(d.revenue) / adminMaxRevenue) * 100)}%` }" />
+                    <div class="rep-bar-lbl">{{ fmtDay(d.day).split(' ')[0] }}</div>
+                  </div>
+                </div>
+              </div>
+              <p v-else class="rep-muted">Aún no hay ventas en los últimos 7 días.</p>
+            </section>
+
+            <section v-if="admin.data.value.topDishes.length" class="rep-card">
+              <div class="rep-card-head"><div class="rep-card-title">Top platos de hoy</div></div>
+              <div v-for="(d, i) in admin.data.value.topDishes" :key="d.name" class="rep-dish">
+                <span class="rep-dish-pos" :class="{ first: i === 0 }">{{ i + 1 }}</span>
+                <span class="rep-dish-main">
+                  <span class="rep-dish-name">{{ d.name }}</span>
+                </span>
+                <span class="rep-dish-right">
+                  <span class="rep-dish-units">{{ formatPEN(num(d.revenue)) }}</span>
+                  <span class="rep-dish-sub">{{ d.qty }} und · contrib. {{ formatPEN(num(d.contribution)) }}</span>
+                </span>
+              </div>
+            </section>
+          </template>
+        </template>
+
+        <!-- ---- Gerente (operativo) ---- -->
+        <template v-else>
+          <RepError v-if="manager.error.value" @retry="manager.refresh()" />
+          <RepLoading v-else-if="manager.isLoading.value && !manager.data.value" />
+          <template v-else-if="manager.data.value">
+            <div class="rep-eyebrow">Operación de hoy</div>
+            <div class="rep-stat-grid">
+              <div class="rep-stat accent">
+                <span class="rep-stat-k">Ventas hoy</span>
+                <span class="rep-stat-v"><span class="cur">S/</span>{{ num(manager.data.value.revenueToday).toLocaleString('es-PE') }}</span>
+                <span class="rep-stat-meta">{{ manager.data.value.salesToday }} ticket{{ manager.data.value.salesToday === 1 ? '' : 's' }}</span>
+              </div>
+              <NuxtLink to="/app/pos" class="rep-stat link">
+                <span class="rep-stat-k">Mesas ocupadas</span>
+                <span class="rep-stat-v">{{ manager.data.value.openTables }}</span>
+                <span class="rep-stat-meta">{{ manager.data.value.ordersOpen }} cuenta{{ manager.data.value.ordersOpen === 1 ? '' : 's' }} abierta{{ manager.data.value.ordersOpen === 1 ? '' : 's' }}</span>
+              </NuxtLink>
+              <NuxtLink to="/app/cocina" class="rep-stat link">
+                <span class="rep-stat-k">En cocina</span>
+                <span class="rep-stat-v">{{ manager.data.value.itemsInKitchen }}</span>
+                <span class="rep-stat-meta">ítems pendientes</span>
+              </NuxtLink>
+              <NuxtLink to="/app/stock" class="rep-stat link">
+                <span class="rep-stat-k">Stock bajo</span>
+                <span class="rep-stat-v" :class="{ 'danger-fg': manager.data.value.lowStockCount > 0 }">{{ manager.data.value.lowStockCount }}</span>
+                <span class="rep-stat-meta">insumos</span>
+              </NuxtLink>
             </div>
-          </div>
-        </div>
-      </section>
 
-      <!-- ============ 8. PAYMENT MIX ============ -->
-      <section id="payment-mix" class="rep-card" aria-label="Métodos de pago">
-        <div class="rep-card-head">
-          <div class="rep-card-title">Métodos de pago</div>
-        </div>
-        <div class="rep-paybar" role="img" aria-label="Yape 42%, Efectivo 31%, Tarjeta 27%">
-          <span v-for="p in PAYMENT_MIX" :key="p.label" :style="{ width: `${p.pct}%`, background: p.color }">
-            {{ p.pct >= 20 ? `${p.pct}%` : '' }}
-          </span>
-        </div>
-        <div class="rep-pay-legend">
-          <span v-for="p in PAYMENT_MIX" :key="p.label" class="rep-pay-item">
-            <span class="dot" :style="{ background: p.color }" />
-            {{ p.label }} <b>{{ p.pct }}%</b>
-          </span>
-        </div>
-      </section>
-
-      <!-- ============ 9. HOURS HEATMAP ============ -->
-      <section id="hours-heatmap" class="rep-card" aria-label="Mapa de calor de horas">
-        <div class="rep-card-head">
-          <div class="rep-card-title">¿Cuándo vendes más?</div>
-        </div>
-        <div class="rep-heat">
-          <div class="rep-heat-corner" />
-          <div v-for="c in HEAT_COLS" :key="c" class="rep-heat-colh">{{ c }}</div>
-          <template v-for="(row, ri) in HEAT" :key="ri">
-            <div class="rep-heat-rowh">{{ HEAT_ROWS[ri] }}</div>
-            <div
-              v-for="(v, ci) in row"
-              :key="ci"
-              class="rep-heat-cell"
-              :class="{ peak: v >= 1 }"
-              :style="{ background: `rgba(201, 106, 67, ${heatAlpha(v)})`, animationDelay: `${(ri * 7 + ci) * 0.012}s` }"
-              :title="`${HEAT_ROWS[ri]} · ${HEAT_COLS[ci]}`"
+            <section v-if="manager.data.value.topDishesToday.length" class="rep-card">
+              <div class="rep-card-head"><div class="rep-card-title">Top platos de hoy</div></div>
+              <div v-for="(d, i) in manager.data.value.topDishesToday" :key="d.name" class="rep-dish">
+                <span class="rep-dish-pos" :class="{ first: i === 0 }">{{ i + 1 }}</span>
+                <span class="rep-dish-main"><span class="rep-dish-name">{{ d.name }}</span></span>
+                <span class="rep-dish-right">
+                  <span class="rep-dish-units">{{ formatPEN(num(d.revenue)) }}</span>
+                  <span class="rep-dish-sub">{{ d.qty }} und</span>
+                </span>
+              </div>
+            </section>
+            <UiEmptyState
+              v-else
+              icon="i-lucide-utensils"
+              title="Sin ventas de platos hoy"
+              subtitle="Cuando se emitan ventas, aquí verás los platos más vendidos del día."
             />
           </template>
-        </div>
-        <div class="rep-heat-foot">
-          <UIcon name="i-lucide-flame" /> Tu hora pico es el <b>sábado, 1–3 PM</b>.
-        </div>
-      </section>
+        </template>
+      </template>
 
-      <!-- ============ 10. FORECAST TEASER (E08) ============ -->
-      <section id="forecast-teaser" class="rep-card rep-forecast" aria-label="Forecast próxima semana">
-        <span class="rep-badge"><UIcon name="i-lucide-sparkles" /> IA · Próximamente</span>
-        <div class="rep-card-head">
-          <div class="rep-card-title">Forecast · próxima semana</div>
+      <!-- ============================ VENTAS ============================ -->
+      <template v-else-if="tab === 'ventas'">
+        <div class="rep-toolbar">
+          <div class="rep-presets" role="tablist" aria-label="Rango de fechas">
+            <button v-for="p in PRESETS" :key="p.key" role="tab" :aria-selected="preset === p.key" class="rep-preset" :class="{ active: preset === p.key }" @click="preset = p.key">{{ p.label }}</button>
+          </div>
+          <button class="rep-export-btn sm" :disabled="exporting || !sales.data.value" @click="exportCsv('sales')">
+            <UIcon :name="exporting ? 'i-lucide-loader-circle' : 'i-lucide-download'" :class="{ spin: exporting }" /> CSV
+          </button>
         </div>
-        <div class="rep-forecast-sub">
-          Proyección <b>S/ 15,500</b> · rango <b>S/ 14,200 – 16,800</b>
-        </div>
+        <div class="rep-range-note">{{ rangeLabel }}</div>
 
-        <div class="rep-forecast-chart">
-          <svg :viewBox="`0 0 ${FORECAST.W} ${FORECAST.H}`" role="img" aria-label="Banda de proyección P10 a P90">
-            <path :d="FORECAST.areaPath" fill="rgba(201,106,67,0.16)" stroke="none" />
-            <polyline
-              :points="FORECAST.centerPts"
-              fill="none"
-              stroke="var(--terracotta)"
-              stroke-width="2"
-              stroke-dasharray="5 4"
-              stroke-linecap="round"
-            />
-          </svg>
-
-          <div class="rep-forecast-lock">
-            <div class="rep-lock-ico" aria-hidden="true"><UIcon name="i-lucide-lock" /></div>
-            <div class="rep-lock-text">
-              El forecast de demanda con IA llega en el próximo sprint.
+        <RepError v-if="sales.error.value" @retry="sales.refresh()" />
+        <RepLoading v-else-if="sales.isLoading.value && !sales.data.value" />
+        <template v-else-if="sales.data.value">
+          <div class="rep-stat-grid three">
+            <div class="rep-stat accent">
+              <span class="rep-stat-k">Ingresos</span>
+              <span class="rep-stat-v"><span class="cur">S/</span>{{ num(sales.data.value.totalRevenue).toLocaleString('es-PE') }}</span>
             </div>
-            <button class="rep-lock-btn" @click="notifyForecast">
-              <UIcon name="i-lucide-bell" /> Avísame cuando esté listo
-            </button>
+            <div class="rep-stat">
+              <span class="rep-stat-k">Ventas</span>
+              <span class="rep-stat-v">{{ sales.data.value.salesCount }}</span>
+            </div>
+            <div class="rep-stat">
+              <span class="rep-stat-k">Ticket prom.</span>
+              <span class="rep-stat-v">{{ formatPEN(num(sales.data.value.avgTicket)) }}</span>
+            </div>
+          </div>
+
+          <section class="rep-card">
+            <div class="rep-card-head">
+              <div class="rep-card-title">Serie de ventas</div>
+              <div class="rep-metric-toggle" role="tablist" aria-label="Agrupar la serie">
+                <button v-for="g in GROUP_OPTS" :key="g.id" role="tab" :aria-selected="salesGroupBy === g.id" :class="{ active: salesGroupBy === g.id }" @click="salesGroupBy = g.id">{{ g.label }}</button>
+              </div>
+            </div>
+            <div v-if="salesSeries.length" class="rep-chart">
+              <div class="rep-bars">
+                <div
+                  v-for="(p, i) in salesSeries"
+                  :key="i"
+                  class="rep-bar-col"
+                  :aria-label="`${seriesKeyLabel(p.key)}: ${formatPEN(num(p.revenue))}, ${p.count} ventas`"
+                >
+                  <div class="rep-bar" :style="{ height: `${Math.max(3, (num(p.revenue) / salesMax) * 100)}%` }" />
+                  <div class="rep-bar-lbl">{{ seriesKeyLabel(p.key) }}</div>
+                </div>
+              </div>
+            </div>
+            <p v-else class="rep-muted">Sin ventas en este rango.</p>
+
+            <div class="rep-table-wrap">
+              <table class="rep-table">
+                <thead><tr><th class="left">{{ salesGroupBy === 'day' ? 'Día' : salesGroupBy === 'method' ? 'Método' : 'Comprobante' }}</th><th>Ventas</th><th>Ingresos</th></tr></thead>
+                <tbody>
+                  <tr v-for="(p, i) in salesSeries" :key="i">
+                    <td class="left name">{{ seriesKeyLabel(p.key) }}</td>
+                    <td>{{ p.count }}</td>
+                    <td class="strong">{{ formatPEN(num(p.revenue)) }}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </section>
+        </template>
+      </template>
+
+      <!-- ============================ PARETO ============================ -->
+      <template v-else-if="tab === 'pareto'">
+        <div class="rep-toolbar">
+          <div class="rep-presets" role="tablist" aria-label="Rango de fechas">
+            <button v-for="p in PRESETS" :key="p.key" role="tab" :aria-selected="preset === p.key" class="rep-preset" :class="{ active: preset === p.key }" @click="preset = p.key">{{ p.label }}</button>
           </div>
         </div>
-      </section>
+        <div class="rep-range-note">{{ rangeLabel }}</div>
 
-      <!-- ============ 11. EXPORT BAR ============ -->
-      <section id="export-bar" aria-label="Exportar reporte">
-        <div class="rep-section-eyebrow">Exportar</div>
-        <div class="rep-export">
-          <button class="rep-export-btn" @click="soon">
-            <UIcon name="i-lucide-download" /> Descargar PDF
-          </button>
-          <button class="rep-export-btn" @click="soon">
-            <UIcon name="i-lucide-mail" /> Enviar por correo
-          </button>
-        </div>
-      </section>
-    </div>
-
-    <!-- ============ Share action sheet ============ -->
-    <UiBottomSheet v-model="showShare" title="Compartir reporte">
-      <template #default="{ close }">
-        <div class="rep-sheet-list">
-          <button
-            v-for="it in SHARE_ITEMS"
-            :key="it.label"
-            class="rep-sheet-item"
-            @click="shareItem(close)"
-          >
-            <span class="ico" aria-hidden="true"><UIcon :name="it.icon" /></span>
-            {{ it.label }}
-            <span class="soon">PRONTO</span>
-          </button>
-        </div>
+        <RepError v-if="pareto.error.value" @retry="pareto.refresh()" />
+        <RepLoading v-else-if="pareto.isLoading.value && !pareto.data.value" />
+        <template v-else-if="pareto.data.value">
+          <section v-if="pareto.data.value.items.length" class="rep-card">
+            <div class="rep-card-head">
+              <div class="rep-card-title">Pareto de platos (ABC)</div>
+              <span class="rep-card-meta">Total {{ formatPEN(num(pareto.data.value.totalRevenue)) }}</span>
+            </div>
+            <p class="rep-hint"><UIcon name="i-lucide-info" /> Clase A = 80% del ingreso (estrellas), B hasta 95%, C el resto. Acumulado por revenue.</p>
+            <div v-for="it in pareto.data.value.items" :key="it.name" class="rep-pareto-row">
+              <span class="rep-abc" :class="`abc-${it.abcClass.toLowerCase()}`">{{ it.abcClass }}</span>
+              <div class="rep-pareto-main">
+                <div class="rep-pareto-top">
+                  <span class="rep-pareto-name">{{ it.name }}</span>
+                  <span class="rep-pareto-rev">{{ formatPEN(num(it.revenue)) }}</span>
+                </div>
+                <div class="rep-dish-track">
+                  <span class="rep-dish-fill" :class="`abc-${it.abcClass.toLowerCase()}`" :style="{ width: `${(num(it.revenue) / paretoMax) * 100}%` }" />
+                </div>
+                <div class="rep-pareto-sub">
+                  {{ it.qty }} und · {{ fmtPct(it.revenuePct) }} del total · acum. {{ fmtPct(it.cumulativePct) }} · {{ abcClassLabel(it.abcClass) }}
+                </div>
+              </div>
+            </div>
+          </section>
+          <UiEmptyState
+            v-else
+            icon="i-lucide-trophy"
+            title="Sin ventas en este rango"
+            subtitle="El análisis Pareto/ABC necesita ventas emitidas para clasificar los platos."
+          />
+        </template>
       </template>
-    </UiBottomSheet>
 
-    <!-- ============ Custom range modal ============ -->
-    <Teleport to="body">
-      <div v-if="showCustom" class="rep-modal-overlay" @click="showCustom = false">
-        <div class="rep-modal" role="dialog" aria-label="Rango personalizado" @click.stop>
-          <div class="rep-modal-ico" aria-hidden="true"><UIcon name="i-lucide-calendar-range" /></div>
-          <h3>Rango personalizado</h3>
-          <p>Pronto podrás elegir cualquier rango de fechas para tus reportes. Por ahora usa Hoy, Semana o Mes.</p>
-          <button class="rep-modal-btn" @click="showCustom = false">Entendido</button>
+      <!-- ============================ INVENTARIO ============================ -->
+      <template v-else-if="tab === 'inventario'">
+        <div class="rep-toolbar end">
+          <button class="rep-export-btn sm" :disabled="exporting || !inventory.data.value" @click="exportCsv('inventory')">
+            <UIcon :name="exporting ? 'i-lucide-loader-circle' : 'i-lucide-download'" :class="{ spin: exporting }" /> CSV
+          </button>
         </div>
-      </div>
-    </Teleport>
+
+        <RepError v-if="inventory.error.value" @retry="inventory.refresh()" />
+        <RepLoading v-else-if="inventory.isLoading.value && !inventory.data.value" />
+        <template v-else-if="inventory.data.value">
+          <div class="rep-stat-grid">
+            <div class="rep-stat accent">
+              <span class="rep-stat-k">Valor del stock</span>
+              <span class="rep-stat-v"><span class="cur">S/</span>{{ num(inventory.data.value.totalStockValue).toLocaleString('es-PE') }}</span>
+              <span class="rep-stat-meta">{{ inventory.data.value.totalSkus }} insumos</span>
+            </div>
+            <div class="rep-stat">
+              <span class="rep-stat-k">Stock bajo</span>
+              <span class="rep-stat-v" :class="{ 'danger-fg': inventory.data.value.lowStockCount > 0 }">{{ inventory.data.value.lowStockCount }}</span>
+            </div>
+            <div class="rep-stat">
+              <span class="rep-stat-k">Críticos</span>
+              <span class="rep-stat-v" :class="{ 'danger-fg': inventory.data.value.criticalCount > 0 }">{{ inventory.data.value.criticalCount }}</span>
+            </div>
+          </div>
+
+          <section v-if="inventory.data.value.items.length" class="rep-card">
+            <div class="rep-card-head"><div class="rep-card-title">Valoración por insumo</div></div>
+            <div class="rep-table-wrap">
+              <table class="rep-table">
+                <thead><tr><th class="left">Insumo</th><th>Stock</th><th>Costo u.</th><th>Valor</th><th class="left">Estado</th></tr></thead>
+                <tbody>
+                  <tr v-for="it in inventory.data.value.items" :key="it.ingredientId" :class="{ low: it.status !== 'ok' }">
+                    <td class="left name">{{ it.name }}</td>
+                    <td>{{ num(it.stock).toLocaleString('es-PE') }} <small>{{ it.unit }}</small></td>
+                    <td>{{ formatPEN(num(it.unitCost)) }}</td>
+                    <td class="strong">{{ formatPEN(num(it.stockValue)) }}</td>
+                    <td class="left"><span class="rep-status" :class="statusClass(it.status)">{{ statusLabel(it.status) }}</span></td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </section>
+          <UiEmptyState v-else icon="i-lucide-package" title="Sin insumos" subtitle="Registra insumos en Inventario para ver la valoración del stock." />
+        </template>
+      </template>
+
+      <!-- ============================ FOOD COST ============================ -->
+      <template v-else-if="tab === 'foodcost'">
+        <div class="rep-toolbar">
+          <label class="rep-period-field">
+            <span>Período</span>
+            <input v-model="period" type="month" aria-label="Período (mes)">
+          </label>
+          <button class="rep-export-btn sm" :disabled="exporting || !foodcost.data.value" @click="exportCsv('food-cost')">
+            <UIcon :name="exporting ? 'i-lucide-loader-circle' : 'i-lucide-download'" :class="{ spin: exporting }" /> CSV
+          </button>
+        </div>
+
+        <RepError v-if="foodcost.error.value" @retry="foodcost.refresh()" />
+        <RepLoading v-else-if="foodcost.isLoading.value && !foodcost.data.value" />
+        <template v-else-if="foodcost.data.value">
+          <div class="rep-stat-grid two">
+            <div class="rep-stat accent">
+              <span class="rep-stat-k">Food cost global</span>
+              <span class="rep-stat-v">{{ fmtPct(foodcost.data.value.overallFoodCostPct) }}</span>
+              <span class="rep-stat-meta">{{ periodLabel(period) }}</span>
+            </div>
+            <div class="rep-stat">
+              <span class="rep-stat-k">Objetivo</span>
+              <span class="rep-stat-v">{{ fmtPct(foodcost.data.value.targetFoodCostPct) }}</span>
+              <span class="rep-stat-meta">referencia</span>
+            </div>
+          </div>
+
+          <section v-if="foodcost.data.value.dishes.length" class="rep-card">
+            <div class="rep-card-head"><div class="rep-card-title">Food cost por plato</div></div>
+            <p class="rep-hint"><UIcon name="i-lucide-info" /> Food cost % = costo de ingredientes ÷ precio. Resaltado en rojo lo que supera el objetivo ({{ fmtPct(foodcost.data.value.targetFoodCostPct) }}).</p>
+            <div class="rep-table-wrap">
+              <table class="rep-table">
+                <thead><tr><th class="left">Plato</th><th>Precio</th><th>Ingred.</th><th>Food&nbsp;cost</th><th>Uds.</th><th>Ingresos</th></tr></thead>
+                <tbody>
+                  <tr v-for="d in foodcost.data.value.dishes" :key="d.name" :class="{ low: foodCostClass(num(d.foodCostPct), num(foodcost.data.value.targetFoodCostPct)) === 'bad' }">
+                    <td class="left name">{{ d.name }}</td>
+                    <td>{{ formatPEN(num(d.sellPrice)) }}</td>
+                    <td>{{ formatPEN(num(d.ingredientCost)) }}</td>
+                    <td><span class="rep-fc" :class="foodCostClass(num(d.foodCostPct), num(foodcost.data.value.targetFoodCostPct))">{{ fmtPct(d.foodCostPct) }}</span></td>
+                    <td>{{ d.unitsSold }}</td>
+                    <td class="strong">{{ formatPEN(num(d.revenue)) }}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </section>
+          <UiEmptyState v-else icon="i-lucide-percent" :title="`Sin platos activos en ${periodLabel(period)}`" subtitle="Activa platos con receta y registra ventas para calcular el food cost." />
+        </template>
+      </template>
+
+      <!-- ============================ MERMAS ============================ -->
+      <template v-else-if="tab === 'mermas'">
+        <div class="rep-toolbar">
+          <div class="rep-presets" role="tablist" aria-label="Rango de fechas">
+            <button v-for="p in PRESETS" :key="p.key" role="tab" :aria-selected="preset === p.key" class="rep-preset" :class="{ active: preset === p.key }" @click="preset = p.key">{{ p.label }}</button>
+          </div>
+          <button class="rep-export-btn sm" :disabled="exporting || !waste.data.value" @click="exportCsv('waste')">
+            <UIcon :name="exporting ? 'i-lucide-loader-circle' : 'i-lucide-download'" :class="{ spin: exporting }" /> CSV
+          </button>
+        </div>
+        <div class="rep-range-note">{{ rangeLabel }}</div>
+
+        <RepError v-if="waste.error.value" @retry="waste.refresh()" />
+        <RepLoading v-else-if="waste.isLoading.value && !waste.data.value" />
+        <template v-else-if="waste.data.value">
+          <div class="rep-stat-grid two">
+            <div class="rep-stat accent">
+              <span class="rep-stat-k">Costo de mermas</span>
+              <span class="rep-stat-v"><span class="cur">S/</span>{{ num(waste.data.value.totalWasteCost).toLocaleString('es-PE') }}</span>
+            </div>
+            <div class="rep-stat">
+              <span class="rep-stat-k">Cantidad total</span>
+              <span class="rep-stat-v">{{ num(waste.data.value.totalWasteQty).toLocaleString('es-PE') }}</span>
+              <span class="rep-stat-meta">unidades de insumo</span>
+            </div>
+          </div>
+
+          <template v-if="waste.data.value.movements.length">
+            <section v-if="waste.data.value.byReason.length" class="rep-card">
+              <div class="rep-card-head"><div class="rep-card-title">Por razón</div></div>
+              <div v-for="r in waste.data.value.byReason" :key="r.reason" class="rep-pareto-row">
+                <div class="rep-pareto-main">
+                  <div class="rep-pareto-top">
+                    <span class="rep-pareto-name capitalize">{{ r.reason }}</span>
+                    <span class="rep-pareto-rev">{{ formatPEN(num(r.cost)) }}</span>
+                  </div>
+                  <div class="rep-dish-track">
+                    <span class="rep-dish-fill" :style="{ width: `${(num(r.cost) / wasteReasonMax) * 100}%` }" />
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            <section v-if="waste.data.value.byIngredient.length" class="rep-card">
+              <div class="rep-card-head"><div class="rep-card-title">Por insumo</div></div>
+              <div class="rep-table-wrap">
+                <table class="rep-table">
+                  <thead><tr><th class="left">Insumo</th><th>Cantidad</th><th>Costo</th></tr></thead>
+                  <tbody>
+                    <tr v-for="ing in waste.data.value.byIngredient" :key="ing.ingredientId">
+                      <td class="left name">{{ ing.name }}</td>
+                      <td>{{ num(ing.qty).toLocaleString('es-PE') }}</td>
+                      <td class="strong">{{ formatPEN(num(ing.cost)) }}</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </section>
+          </template>
+          <UiEmptyState v-else icon="i-lucide-trash-2" title="Sin mermas en este rango" subtitle="No se registraron salidas por merma. Las mermas se registran en Inventario." />
+        </template>
+      </template>
+    </div>
   </div>
 </template>
 
 <style scoped>
-/* Portado de reports-styles.css (Claude Design). Prefijo: rep-
-   Adaptado al shell Nuxt: scroll de documento + columna centrada (760px),
-   header sticky (no absolute), sin bottom-nav propio (lo da el layout). */
+.rep { max-width: 860px; margin: 0 auto; padding-bottom: 24px; }
 
-/* ============ TOP REGION (header + selector, sticky) ============ */
-.rep-top {
-  position: sticky;
-  top: 0;
-  z-index: 6;
-  background: var(--crema);
-  border-bottom: 1px solid transparent;
-  transition: border-color var(--dur), box-shadow var(--dur), background var(--dur);
-}
-.rep-top.scrolled {
-  border-bottom-color: var(--border-subtle);
-  background: rgba(243, 237, 228, 0.92);
-  backdrop-filter: blur(14px) saturate(180%);
-  -webkit-backdrop-filter: blur(14px) saturate(180%);
-}
-
-.rep-hdr {
-  max-width: 760px;
-  margin: 0 auto;
-  padding: calc(12px + env(safe-area-inset-top, 0px)) 14px 10px;
-  display: grid;
-  grid-template-columns: 40px 1fr 40px;
-  align-items: center;
-  gap: 8px;
-}
-@media (min-width: 1024px) {
-  .rep-hdr { padding-top: 28px; }
-}
-/* botones de ícono del header → .icon-btn global (components.css) */
-.rep-hdr-center { text-align: center; min-width: 0; }
-.rep-hdr-title {
-  font-family: var(--font-serif);
-  font-style: italic; font-weight: 500;
-  font-size: 21px; line-height: 1;
-  color: var(--fg1);
-  margin: 0;
-}
-.rep-hdr-sub {
-  font-size: 12px; color: var(--fg3);
-  margin-top: 3px;
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-}
-
-/* --- Period selector (segmented) --- */
-.rep-periods {
-  max-width: 760px;
-  margin: 0 auto;
+/* ============ Tabs ============ */
+.rep-tabs {
   display: flex; gap: 6px;
-  padding: 2px 14px 12px;
+  padding: 0 20px 12px;
   overflow-x: auto;
   scrollbar-width: none;
 }
-.rep-periods::-webkit-scrollbar { display: none; }
-.rep-period {
+.rep-tabs::-webkit-scrollbar { display: none; }
+.rep-tab {
   flex: 0 0 auto;
-  font: inherit; font-size: 13.5px; font-weight: 600;
+  display: inline-flex; align-items: center; gap: 6px;
+  font: inherit; font-size: 13px; font-weight: 600;
   color: var(--fg2);
   background: var(--pure-white);
   border: 1px solid var(--border-subtle);
   border-radius: 999px;
-  padding: 8px 16px;
+  padding: 8px 14px;
   cursor: pointer;
-  display: inline-flex; align-items: center; gap: 6px;
-  transition: transform 80ms var(--ease-standard);
+  transition: background var(--dur), color var(--dur), border-color var(--dur), transform 80ms;
 }
-.rep-period:active { transform: scale(0.96); }
-.rep-period.active {
-  background: var(--terracotta);
-  color: var(--crema-100);
-  border-color: var(--terracotta);
-}
-.rep-period.locked {
-  color: var(--fg3);
-  border-style: dashed;
-  border-color: var(--border);
-  background: transparent;
-}
-.rep-period.locked :deep(svg) { width: 13px; height: 13px; opacity: 0.8; }
+.rep-tab:active { transform: scale(0.96); }
+.rep-tab.active { background: var(--terracotta); color: var(--crema-100); border-color: var(--terracotta); }
+.rep-tab :deep(svg) { width: 15px; height: 15px; }
 
-/* ============ CONTENT COLUMN ============ */
-.rep-content {
-  max-width: 760px;
-  margin: 0 auto;
-  padding: 12px 14px 24px;
-  position: relative;
+.rep-content { padding: 0 20px; }
+
+/* ============ Toolbar (presets + export) ============ */
+.rep-toolbar {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  margin-bottom: 8px; flex-wrap: wrap;
+}
+.rep-toolbar.end { justify-content: flex-end; }
+.rep-presets { display: inline-flex; gap: 6px; overflow-x: auto; scrollbar-width: none; }
+.rep-presets::-webkit-scrollbar { display: none; }
+.rep-preset {
+  flex: 0 0 auto;
+  font: inherit; font-size: 12.5px; font-weight: 600; color: var(--fg2);
+  background: var(--pure-white);
+  border: 1px solid var(--border-subtle); border-radius: 999px;
+  padding: 7px 13px; cursor: pointer;
+  transition: background var(--dur), color var(--dur), border-color var(--dur);
+}
+.rep-preset.active { background: var(--espresso); color: var(--crema-100); border-color: var(--espresso); }
+.rep-range-note { font-size: 12px; color: var(--fg3); margin: 0 2px 14px; font-variant-numeric: tabular-nums; }
+
+.rep-period-field { display: flex; flex-direction: column; gap: 5px; }
+.rep-period-field span { font-size: 11px; font-weight: 600; color: var(--fg3); text-transform: uppercase; letter-spacing: 0.04em; }
+.rep-period-field input {
+  font: inherit; font-size: 14px; color: var(--fg1);
+  background: var(--pure-white); border: 1px solid var(--border); border-radius: 10px; padding: 7px 10px;
+}
+.rep-period-field input:focus { outline: none; border-color: var(--terracotta); box-shadow: 0 0 0 3px rgba(201, 106, 67, 0.18); }
+
+.rep-export-btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 7px;
+  background: var(--pure-white); border: 1px solid var(--border); border-radius: 10px;
+  padding: 8px 13px; font: inherit; font-size: 12.5px; font-weight: 600; color: var(--fg1);
+  cursor: pointer; transition: background var(--dur), transform 80ms;
+}
+.rep-export-btn:hover { background: var(--crema-100); }
+.rep-export-btn:active { transform: scale(0.98); }
+.rep-export-btn:disabled { opacity: 0.55; cursor: default; }
+.rep-export-btn :deep(svg) { width: 15px; height: 15px; color: var(--fg2); }
+
+.rep-eyebrow {
+  font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--fg3); padding: 0 2px 10px;
 }
 
-/* Shared card */
+/* ============ Stat grid ============ */
+.rep-stat-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-bottom: 12px; }
+.rep-stat-grid.three { grid-template-columns: repeat(3, 1fr); }
+.rep-stat-grid.two { grid-template-columns: repeat(2, 1fr); }
+@media (max-width: 520px) {
+  .rep-stat-grid.three { grid-template-columns: 1fr 1fr; }
+}
+.rep-stat {
+  background: var(--pure-white);
+  border: 1px solid var(--border-subtle);
+  border-radius: 16px;
+  padding: 14px;
+  display: flex; flex-direction: column; gap: 4px;
+  box-shadow: var(--shadow-sm);
+  min-height: 92px;
+  text-decoration: none;
+}
+.rep-stat.link { transition: border-color var(--dur), transform 80ms; }
+.rep-stat.link:hover { border-color: var(--border); }
+.rep-stat.link:active { transform: scale(0.98); }
+.rep-stat.accent { background: linear-gradient(140deg, var(--espresso) 0%, var(--espresso-800) 100%); border-color: transparent; }
+.rep-stat-k { font-size: 11px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--fg3); }
+.rep-stat.accent .rep-stat-k { color: rgba(243, 237, 228, 0.62); }
+.rep-stat-v {
+  font-size: 25px; font-weight: 600; letter-spacing: -0.02em; line-height: 1.05; color: var(--fg1);
+  font-variant-numeric: tabular-nums;
+}
+.rep-stat.accent .rep-stat-v { color: var(--crema-100); }
+.rep-stat-v.accent-fg { color: var(--terracotta-700); }
+.rep-stat-v.danger-fg { color: var(--danger); }
+.rep-stat-v .cur { font-size: 14px; font-weight: 500; color: var(--fg3); margin-right: 3px; vertical-align: 0.16em; }
+.rep-stat.accent .rep-stat-v .cur { color: rgba(243, 237, 228, 0.55); }
+.rep-stat-meta { font-size: 11.5px; color: var(--fg3); margin-top: auto; }
+.rep-stat.accent .rep-stat-meta { color: rgba(243, 237, 228, 0.55); }
+.rep-stat-link { font-size: 11.5px; font-weight: 600; color: var(--terracotta-700); margin-top: auto; }
+
+/* ============ Card ============ */
 .rep-card {
   background: var(--pure-white);
   border: 1px solid var(--border-subtle);
@@ -762,548 +729,92 @@ onBeforeUnmount(() => window.removeEventListener('scroll', onScroll))
   box-shadow: var(--shadow-sm);
 }
 .rep-card + .rep-card { margin-top: 12px; }
-
-.rep-card-head {
-  display: flex; align-items: center; justify-content: space-between;
-  gap: 10px; margin-bottom: 14px;
-}
+.rep-card-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 14px; }
 .rep-card-title {
-  font-family: var(--font-serif);
-  font-style: italic; font-weight: 500;
-  font-size: 18px; line-height: 1.1;
-  color: var(--fg1);
+  font-family: var(--font-serif); font-style: italic; font-weight: 500;
+  font-size: 17px; line-height: 1.1; color: var(--fg1);
 }
-.rep-card-link {
-  font: inherit; font-size: 12.5px; font-weight: 600;
-  color: var(--terracotta-700);
-  background: none; border: none; cursor: pointer;
-  display: inline-flex; align-items: center; gap: 3px;
-  padding: 4px;
+.rep-card-meta { font-size: 12px; font-weight: 600; color: var(--fg3); font-variant-numeric: tabular-nums; }
+.rep-muted { font-size: 13px; color: var(--fg3); text-align: center; padding: 18px 0; }
+.rep-hint {
+  display: flex; align-items: flex-start; gap: 6px;
+  font-size: 12px; color: var(--fg2); line-height: 1.45; margin: -4px 0 14px;
 }
-.rep-card-link :deep(svg) { width: 14px; height: 14px; }
+.rep-hint :deep(svg) { width: 14px; height: 14px; color: var(--fg3); flex-shrink: 0; margin-top: 1px; }
 
-/* ============ 3. AI SUMMARY ============ */
-.rep-ai {
-  background: linear-gradient(158deg, var(--crema-100) 0%, #FBF1EB 100%);
-  border: 1px solid var(--terracotta-100);
-  border-radius: 16px;
-  padding: 16px;
-  position: relative;
-  overflow: hidden;
-  box-shadow: var(--shadow-sm);
-  margin-bottom: 12px;
-}
-.rep-ai-head {
-  display: flex; align-items: center; gap: 10px;
-  margin-bottom: 12px;
-}
-.rep-ai-avatar {
-  width: 36px; height: 36px; border-radius: 50%;
-  background: linear-gradient(135deg, #4AA6B8 0%, var(--terracotta) 100%);
-  color: #fff;
-  display: inline-flex; align-items: center; justify-content: center;
-  flex-shrink: 0;
-  box-shadow: 0 2px 8px rgba(201, 106, 67, 0.35);
-}
-.rep-ai-avatar :deep(svg) { width: 19px; height: 19px; }
-.rep-ai-label {
-  font-size: 11px; font-weight: 700; letter-spacing: 0.06em;
-  text-transform: uppercase; color: var(--terracotta-700);
-}
-.rep-ai-label .sep { color: var(--fg3); margin: 0 4px; font-weight: 500; }
-.rep-ai-label .ai-tag { color: var(--fg2); }
-.rep-ai-text {
-  font-size: 14.5px; line-height: 1.55; color: var(--fg1);
-  text-wrap: pretty;
-  margin: 0 0 14px;
-}
-.rep-ai-text :deep(b) { font-weight: 600; }
-.rep-ai-text :deep(.hl) {
-  background: linear-gradient(transparent 58%, var(--mostaza-100) 58%);
-  padding: 0 2px; font-weight: 600;
-}
-.rep-ai-cta {
-  display: inline-flex; align-items: center; gap: 7px;
-  background: var(--espresso); color: var(--crema-100);
-  border: none; border-radius: 12px;
-  padding: 11px 16px;
-  font: inherit; font-size: 13.5px; font-weight: 600;
-  cursor: pointer;
-  transition: background var(--dur), transform 80ms;
-}
-.rep-ai-cta:hover { background: var(--espresso-800); }
-.rep-ai-cta:active { transform: scale(0.97); }
-.rep-ai-cta :deep(svg) { width: 15px; height: 15px; color: var(--mostaza); }
-.rep-ai-foot {
-  margin-top: 12px;
-  font-size: 11.5px; color: var(--fg3);
-  display: flex; align-items: center; gap: 6px;
-}
-.rep-ai-foot :deep(svg) { width: 12px; height: 12px; }
+/* ============ Chart (CSS bars) ============ */
+.rep-chart { position: relative; height: 150px; margin-top: 4px; }
+.rep-bars { display: flex; align-items: flex-end; gap: 7px; height: 100%; border-bottom: 1.5px solid var(--border); }
+.rep-bar-col { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; height: 100%; }
+.rep-bar { width: 100%; max-width: 34px; background: var(--terracotta-300); border-radius: 5px 5px 0 0; transition: height 0.5s var(--ease-emphasis); min-height: 2px; }
+.rep-bar-col:first-child .rep-bar, .rep-bar-col:hover .rep-bar { background: var(--terracotta); }
+.rep-bar-lbl { font-size: 10.5px; font-weight: 500; color: var(--fg3); margin-top: 7px; font-variant-numeric: tabular-nums; white-space: nowrap; }
 
-/* ============ 4. KPI GRID 2x2 ============ */
-.rep-kpi-grid {
-  display: grid; grid-template-columns: 1fr 1fr; gap: 10px;
-  margin-bottom: 12px;
-}
-.rep-kpi {
-  background: var(--pure-white);
-  border: 1px solid var(--border-subtle);
-  border-radius: 16px;
-  padding: 13px 14px 12px;
-  display: flex; flex-direction: column; gap: 4px;
-  box-shadow: var(--shadow-sm);
-  min-height: 116px;
-}
-.rep-kpi-eyebrow {
-  font-size: 11px; font-weight: 600; letter-spacing: 0.06em;
-  text-transform: uppercase; color: var(--fg3);
-}
-.rep-kpi-val {
-  font-family: var(--font-sans);
-  font-size: 27px; font-weight: 600; letter-spacing: -0.025em;
-  line-height: 1.05; color: var(--fg1);
-  font-variant-numeric: tabular-nums;
-}
-.rep-kpi-val.accent { color: var(--terracotta-700); }
-.rep-kpi-val .cur {
-  font-size: 14px; font-weight: 500; color: var(--fg3);
-  margin-right: 3px; vertical-align: 0.16em;
-}
-.rep-kpi-delta {
-  font-size: 12px; font-weight: 600;
-  display: inline-flex; align-items: center; gap: 4px;
-}
-.rep-kpi-delta.up { color: var(--oliva-700); }
-.rep-kpi-delta.down { color: var(--danger); }
-.rep-kpi-delta.flat { color: var(--terracotta-700); }
-.rep-kpi-delta :deep(svg) { width: 13px; height: 13px; }
-.rep-kpi-delta .muted { color: var(--fg3); font-weight: 500; }
-.rep-kpi-meta { font-size: 11.5px; color: var(--fg3); margin-top: 2px; }
-.rep-kpi-spark {
-  display: flex; align-items: flex-end; gap: 2.5px;
-  height: 22px; margin-top: auto; padding-top: 6px;
-}
-.rep-kpi-spark span {
-  flex: 1; background: var(--terracotta-100); border-radius: 2px;
-  transform-origin: bottom;
-  transition: height 0.5s var(--ease-emphasis);
-}
-.rep-kpi-spark span.on { background: var(--terracotta); }
-
-/* ============ 5. SALES CHART ============ */
-.rep-metric-toggle {
-  display: inline-flex;
-  background: var(--crema-200);
-  border-radius: 10px;
-  padding: 3px;
-  gap: 2px;
-}
-.rep-metric-toggle button {
-  font: inherit; font-size: 12.5px; font-weight: 600;
-  color: var(--fg2);
-  background: transparent; border: none;
-  padding: 6px 12px; border-radius: 8px;
-  cursor: pointer;
-  transition: background var(--dur), color var(--dur), box-shadow var(--dur);
-}
-.rep-metric-toggle button.active {
-  background: var(--pure-white);
-  color: var(--fg1);
-  box-shadow: var(--shadow-xs);
-}
-.rep-chart {
-  position: relative;
-  height: 168px;
-  margin-top: 6px;
-  padding-top: 20px;
-}
-.rep-chart-avg {
-  position: absolute; left: 0; right: 0;
-  border-top: 1px dashed var(--border-strong);
-  z-index: 1;
-  pointer-events: none;
-}
-.rep-chart-avg .lbl {
-  position: absolute; right: 0; top: -8px;
-  font-size: 9.5px; font-weight: 700; letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: var(--fg3);
-  background: var(--pure-white);
-  padding: 1px 4px;
-}
-.rep-bars {
-  display: flex; align-items: flex-end; gap: 7px;
-  height: 100%;
-  border-bottom: 1.5px solid var(--border);
-  position: relative; z-index: 2;
-}
-.rep-bar-col {
-  flex: 1;
-  display: flex; flex-direction: column; align-items: center;
-  justify-content: flex-end;
-  height: 100%;
-  gap: 0;
-  cursor: pointer;
-  position: relative;
-  background: none; border: none; font: inherit;
-}
-.rep-bar {
-  width: 100%;
-  max-width: 30px;
-  background: var(--terracotta-300);
-  border-radius: 5px 5px 0 0;
-  transition: height 0.6s var(--ease-emphasis), background var(--dur);
-  min-height: 2px;
-}
-.rep-bar-col.peak .rep-bar { background: var(--terracotta); }
-.rep-bar-col.active .rep-bar { background: var(--terracotta-700); }
-.rep-bar-lbl {
-  font-size: 11px; font-weight: 500; color: var(--fg3);
-  margin-top: 7px;
-  font-variant-numeric: tabular-nums;
-}
-.rep-bar-col.peak .rep-bar-lbl,
-.rep-bar-col.active .rep-bar-lbl { color: var(--fg1); font-weight: 600; }
-.rep-tooltip {
-  position: absolute;
-  bottom: calc(100% + 6px);
-  left: 50%; transform: translateX(-50%);
-  background: var(--espresso); color: var(--crema-100);
-  font-size: 11.5px; font-weight: 600;
-  white-space: nowrap;
-  padding: 5px 9px; border-radius: 8px;
-  z-index: 5;
-  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.25);
-  animation: repRise 0.2s var(--ease-standard);
-  font-variant-numeric: tabular-nums;
-}
-.rep-tooltip::after {
-  content: ''; position: absolute; top: 100%; left: 50%;
-  transform: translateX(-50%);
-  border: 4px solid transparent; border-top-color: var(--espresso);
-}
-.rep-chart-peaklabel {
-  margin-top: 14px;
-  font-size: 12px; color: var(--fg2);
-  display: flex; align-items: center; gap: 6px;
-}
-.rep-chart-peaklabel :deep(svg) { width: 13px; height: 13px; color: var(--terracotta); }
-
-@keyframes repRise {
-  from { opacity: 0; transform: translate(-50%, 6px); }
-  to { opacity: 1; transform: translate(-50%, 0); }
-}
-
-/* ============ 6. TOP DISHES ============ */
-.rep-dish {
-  display: grid;
-  grid-template-columns: 18px 1fr auto;
-  align-items: center;
-  gap: 12px;
-  padding: 10px 6px;
-  border: none; background: none;
-  width: 100%; text-align: left;
-  cursor: pointer; font: inherit;
-  border-radius: 10px;
-  transition: background var(--dur);
-}
-.rep-dish:hover { background: var(--crema-100); }
+/* ============ Dish rows (dashboards) ============ */
+.rep-dish { display: grid; grid-template-columns: 18px 1fr auto; align-items: center; gap: 12px; padding: 10px 0; }
 .rep-dish + .rep-dish { border-top: 1px solid var(--border-subtle); }
-.rep-dish-pos {
-  font-family: var(--font-serif);
-  font-style: italic; font-weight: 500;
-  font-size: 16px; color: var(--fg3);
-  text-align: center;
-}
+.rep-dish-pos { font-family: var(--font-serif); font-style: italic; font-weight: 500; font-size: 16px; color: var(--fg3); text-align: center; }
 .rep-dish-pos.first { color: var(--terracotta-700); }
 .rep-dish-main { min-width: 0; }
-.rep-dish-name {
-  display: block;
-  font-size: 14px; font-weight: 600; color: var(--fg1);
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-  margin-bottom: 6px;
+.rep-dish-name { display: block; font-size: 14px; font-weight: 600; color: var(--fg1); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rep-dish-right { text-align: right; display: flex; flex-direction: column; gap: 2px; }
+.rep-dish-units { font-size: 13.5px; font-weight: 700; color: var(--fg1); font-variant-numeric: tabular-nums; }
+.rep-dish-sub { font-size: 11px; color: var(--fg3); font-variant-numeric: tabular-nums; }
+.rep-dish-track { display: block; height: 7px; border-radius: 999px; background: var(--crema-200); overflow: hidden; margin-top: 6px; }
+.rep-dish-fill { display: block; height: 100%; border-radius: 999px; background: var(--terracotta-300); transition: width 0.6s var(--ease-emphasis); }
+.rep-dish-fill.abc-a { background: var(--terracotta); }
+.rep-dish-fill.abc-b { background: var(--mostaza); }
+.rep-dish-fill.abc-c { background: var(--espresso-400); }
+
+/* ============ Pareto rows ============ */
+.rep-pareto-row { display: grid; grid-template-columns: auto 1fr; align-items: start; gap: 12px; padding: 12px 0; }
+.rep-pareto-row + .rep-pareto-row { border-top: 1px solid var(--border-subtle); }
+.rep-abc {
+  width: 26px; height: 26px; border-radius: 8px;
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: 12px; font-weight: 800; flex-shrink: 0;
 }
-.rep-dish-track {
-  display: block;
-  height: 7px; border-radius: 999px;
-  background: var(--crema-200);
-  overflow: hidden;
-}
-.rep-dish-fill {
-  display: block;
-  height: 100%; border-radius: 999px;
-  background: var(--terracotta-300);
-  width: 0;
-  transition: width 0.7s var(--ease-emphasis);
-}
-.rep-dish.first .rep-dish-fill { background: var(--terracotta); }
-.rep-dish-right {
-  display: flex; flex-direction: column; align-items: flex-end; gap: 5px;
-}
-.rep-dish-units {
-  font-size: 13px; font-weight: 600; color: var(--fg1);
+.rep-abc.abc-a { background: var(--terracotta-100); color: var(--terracotta-700); }
+.rep-abc.abc-b { background: var(--mostaza-100); color: var(--mostaza-700); }
+.rep-abc.abc-c { background: var(--crema-200); color: var(--fg2); }
+.rep-pareto-main { min-width: 0; }
+.rep-pareto-top { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+.rep-pareto-name { font-size: 14px; font-weight: 600; color: var(--fg1); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rep-pareto-rev { font-size: 13.5px; font-weight: 700; color: var(--fg1); font-variant-numeric: tabular-nums; flex-shrink: 0; }
+.rep-pareto-sub { font-size: 11.5px; color: var(--fg3); margin-top: 5px; }
+
+/* ============ Methods (cashier) ============ */
+.rep-methods { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.rep-method { display: flex; align-items: center; gap: 9px; }
+.rep-method-dot { width: 11px; height: 11px; border-radius: 3px; flex-shrink: 0; }
+.rep-method-k { font-size: 13px; color: var(--fg2); }
+.rep-method-v { margin-left: auto; font-size: 13.5px; font-weight: 700; color: var(--fg1); font-variant-numeric: tabular-nums; }
+
+/* ============ Table ============ */
+.rep-table-wrap { overflow-x: auto; border: 1px solid var(--border-subtle); border-radius: 12px; margin-top: 14px; }
+.rep-table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+.rep-table th, .rep-table td { padding: 10px; text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.rep-table th { font-size: 10.5px; font-weight: 700; letter-spacing: 0.03em; text-transform: uppercase; color: var(--fg3); border-bottom: 1px solid var(--border-subtle); background: var(--crema-50); }
+.rep-table th.left, .rep-table td.left { text-align: left; }
+.rep-table tbody tr { border-bottom: 1px solid var(--border-subtle); }
+.rep-table tbody tr:last-child { border-bottom: none; }
+.rep-table tbody tr.low { background: var(--danger-bg); }
+.rep-table td.name { font-weight: 600; color: var(--fg1); }
+.rep-table td.strong { font-weight: 700; color: var(--fg1); }
+.rep-table td small { color: var(--fg3); font-weight: 500; }
+
+.rep-fc, .rep-status {
+  display: inline-flex; align-items: center; gap: 3px;
+  font-size: 10.5px; font-weight: 700; padding: 2px 7px; border-radius: 999px;
   font-variant-numeric: tabular-nums;
 }
-.rep-dish-units small { color: var(--fg3); font-weight: 500; font-size: 11px; }
-.rep-margin-chip {
-  font-size: 10.5px; font-weight: 700;
-  font-variant-numeric: tabular-nums;
-  padding: 2px 7px; border-radius: 999px;
-  letter-spacing: 0.01em;
-}
-.rep-margin-chip.good { background: var(--oliva-100); color: var(--oliva-700); }
-.rep-margin-chip.mid { background: var(--mostaza-100); color: var(--mostaza-700); }
-.rep-margin-chip.bad { background: var(--danger-bg); color: var(--danger); }
+.rep-fc.good, .rep-status.ok { background: var(--oliva-100); color: var(--oliva-700); }
+.rep-fc.mid, .rep-status.low { background: var(--mostaza-100); color: var(--mostaza-700); }
+.rep-fc.bad, .rep-status.crit { background: var(--danger-bg); color: var(--danger); }
 
-/* ============ 7. CATEGORY MIX (donut) ============ */
-.rep-donut-wrap {
-  display: flex; align-items: center; gap: 18px;
-}
-.rep-donut { position: relative; flex-shrink: 0; }
-.rep-donut svg { display: block; }
-.rep-donut-center {
-  position: absolute; inset: 0;
-  display: flex; flex-direction: column; align-items: center; justify-content: center;
-  text-align: center;
-}
-.rep-donut-center .v {
-  font-family: var(--font-sans);
-  font-size: 18px; font-weight: 600; letter-spacing: -0.02em;
-  color: var(--fg1); line-height: 1;
-  white-space: nowrap;
-}
-.rep-donut-center .k {
-  font-size: 9.5px; font-weight: 600; letter-spacing: 0.06em;
-  text-transform: uppercase; color: var(--fg3); margin-top: 3px;
-}
-.rep-legend {
-  flex: 1; display: flex; flex-direction: column; gap: 9px;
-  min-width: 0;
-}
-.rep-legend-row {
-  display: grid; grid-template-columns: 12px 1fr auto;
-  align-items: center; gap: 9px;
-}
-.rep-legend-dot {
-  width: 11px; height: 11px; border-radius: 3px;
-}
-.rep-legend-label { font-size: 13px; color: var(--fg2); }
-.rep-legend-val {
-  font-size: 13px; font-weight: 600; color: var(--fg1);
-  font-variant-numeric: tabular-nums;
-}
+.capitalize { text-transform: capitalize; }
 
-/* ============ 8. PAYMENT MIX (stacked bar) ============ */
-.rep-paybar {
-  display: flex; height: 26px; border-radius: 8px; overflow: hidden;
-  margin-bottom: 14px;
-  box-shadow: inset 0 0 0 1px var(--border-subtle);
-}
-.rep-paybar span {
-  height: 100%;
-  display: flex; align-items: center; justify-content: center;
-  font-size: 10.5px; font-weight: 700; color: #fff;
-  transition: width 0.6s var(--ease-emphasis);
-  min-width: 0;
-}
-.rep-pay-legend {
-  display: flex; flex-wrap: wrap; gap: 14px;
-}
-.rep-pay-item {
-  display: inline-flex; align-items: center; gap: 7px;
-  font-size: 12.5px; color: var(--fg2);
-}
-.rep-pay-item .dot { width: 9px; height: 9px; border-radius: 3px; }
-.rep-pay-item b { color: var(--fg1); font-weight: 600; font-variant-numeric: tabular-nums; }
-
-/* ============ 9. HOURS HEATMAP ============ */
-.rep-heat {
-  display: grid;
-  grid-template-columns: 58px repeat(7, 1fr);
-  gap: 5px;
-}
-.rep-heat-colh {
-  text-align: center;
-  font-size: 10.5px; font-weight: 600; color: var(--fg3);
-}
-.rep-heat-rowh {
-  font-size: 10.5px; font-weight: 500; color: var(--fg2);
-  display: flex; align-items: center;
-  white-space: nowrap;
-}
-.rep-heat-cell {
-  height: 34px;
-  border-radius: 6px;
-  position: relative;
-  animation: repFade 0.5s var(--ease-standard) both;
-}
-.rep-heat-cell.peak {
-  box-shadow: 0 0 0 2px var(--espresso);
-}
-@keyframes repFade { from { opacity: 0; } to { opacity: 1; } }
-.rep-heat-foot {
-  margin-top: 14px;
-  font-size: 12.5px; color: var(--fg2);
-  display: flex; align-items: center; gap: 7px;
-}
-.rep-heat-foot :deep(svg) { width: 14px; height: 14px; color: var(--terracotta); }
-.rep-heat-foot b { color: var(--fg1); font-weight: 600; }
-
-/* ============ 10. FORECAST TEASER ============ */
-.rep-forecast { position: relative; overflow: hidden; }
-.rep-forecast .rep-card-title { padding-right: 150px; }
-.rep-forecast .rep-badge {
-  position: absolute; top: 14px; right: 14px;
-  z-index: 4;
-  display: inline-flex; align-items: center; gap: 5px;
-  background: var(--mostaza-100); color: var(--mostaza-700);
-  font-size: 10.5px; font-weight: 700; letter-spacing: 0.04em;
-  padding: 4px 9px; border-radius: 999px;
-}
-.rep-badge :deep(svg) { width: 12px; height: 12px; }
-.rep-forecast-sub {
-  font-size: 12.5px; color: var(--fg2); margin: -6px 0 12px;
-}
-.rep-forecast-sub b { color: var(--fg1); font-weight: 600; font-variant-numeric: tabular-nums; }
-.rep-forecast-chart { position: relative; }
-.rep-forecast-chart svg { display: block; width: 100%; height: auto; }
-.rep-forecast-lock {
-  position: absolute; inset: 0;
-  display: flex; flex-direction: column; align-items: center; justify-content: center;
-  gap: 10px; text-align: center;
-  background: linear-gradient(180deg, rgba(248, 244, 237, 0.32), rgba(248, 244, 237, 0.82));
-  -webkit-backdrop-filter: blur(1.5px); backdrop-filter: blur(1.5px);
-  border-radius: 12px;
-  padding: 16px;
-}
-.rep-lock-ico {
-  width: 38px; height: 38px; border-radius: 50%;
-  background: var(--pure-white); border: 1px solid var(--border-subtle);
-  display: inline-flex; align-items: center; justify-content: center;
-  color: var(--terracotta-700);
-  box-shadow: var(--shadow-sm);
-}
-.rep-lock-ico :deep(svg) { width: 18px; height: 18px; }
-.rep-lock-text {
-  font-size: 12.5px; color: var(--fg2); max-width: 230px; line-height: 1.45;
-}
-.rep-lock-btn {
-  margin-top: 2px;
-  display: inline-flex; align-items: center; gap: 6px;
-  background: var(--terracotta); color: var(--crema-100);
-  border: none; border-radius: 10px;
-  padding: 9px 15px; font: inherit; font-size: 12.5px; font-weight: 600;
-  cursor: pointer;
-  transition: background var(--dur), transform 80ms;
-}
-.rep-lock-btn:hover { background: var(--terracotta-700); }
-.rep-lock-btn:active { transform: scale(0.97); }
-.rep-lock-btn :deep(svg) { width: 14px; height: 14px; }
-
-/* ============ 11. EXPORT BAR ============ */
-.rep-export {
-  display: grid; grid-template-columns: 1fr 1fr; gap: 10px;
-  margin-top: 14px;
-}
-.rep-export-btn {
-  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
-  background: var(--pure-white);
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  padding: 13px;
-  font: inherit; font-size: 13.5px; font-weight: 600;
-  color: var(--fg1);
-  cursor: pointer;
-  transition: background var(--dur), transform 80ms;
-}
-.rep-export-btn:hover { background: var(--crema-100); }
-.rep-export-btn:active { transform: scale(0.98); }
-.rep-export-btn :deep(svg) { width: 16px; height: 16px; color: var(--fg2); }
-
-#export-bar { margin-top: 12px; }
-.rep-section-eyebrow {
-  font-size: 11px; font-weight: 600; letter-spacing: 0.08em;
-  text-transform: uppercase; color: var(--fg3);
-  padding: 6px 2px 4px;
-}
-
-/* ============ ACTION SHEET (share) — contenido dentro de UiBottomSheet ============ */
-.rep-sheet-list { display: flex; flex-direction: column; gap: 6px; }
-.rep-sheet-item {
-  display: flex; align-items: center; gap: 13px;
-  background: var(--pure-white);
-  border: 1px solid var(--border-subtle);
-  border-radius: 14px;
-  padding: 14px;
-  font: inherit; font-size: 14.5px; font-weight: 500; color: var(--fg1);
-  cursor: pointer; text-align: left; width: 100%;
-  transition: background var(--dur), transform 80ms;
-}
-.rep-sheet-item:hover { background: var(--crema-100); }
-.rep-sheet-item:active { transform: scale(0.99); }
-.rep-sheet-item .ico {
-  width: 38px; height: 38px; border-radius: 11px;
-  background: var(--crema-200); color: var(--terracotta-700);
-  display: inline-flex; align-items: center; justify-content: center;
-  flex-shrink: 0;
-}
-.rep-sheet-item .ico :deep(svg) { width: 18px; height: 18px; }
-.rep-sheet-item .soon {
-  margin-left: auto;
-  font-size: 9.5px; font-weight: 700; letter-spacing: 0.06em;
-  color: var(--mostaza-700); background: var(--mostaza-100);
-  padding: 3px 7px; border-radius: 999px;
-}
-
-/* ============ CUSTOM RANGE MODAL ============ */
-.rep-modal-overlay {
-  position: fixed; inset: 0;
-  background: rgba(26, 26, 26, 0.45);
-  z-index: 55;
-  display: flex; align-items: center; justify-content: center;
-  padding: 24px;
-  opacity: 0;
-  animation: repOvIn 200ms var(--ease-standard) forwards;
-}
-@keyframes repOvIn { to { opacity: 1; } }
-.rep-modal {
-  background: var(--crema-100);
-  border-radius: 18px;
-  padding: 24px 20px 18px;
-  text-align: center;
-  max-width: 300px;
-  box-shadow: var(--shadow-lg);
-  animation: repPop 0.3s var(--ease-emphasis);
-}
-@keyframes repPop { from { opacity: 0; transform: scale(0.92); } to { opacity: 1; transform: scale(1); } }
-.rep-modal-ico {
-  width: 48px; height: 48px; border-radius: 14px;
-  background: var(--mostaza-100); color: var(--mostaza-700);
-  display: inline-flex; align-items: center; justify-content: center;
-  margin: 0 auto 14px;
-}
-.rep-modal-ico :deep(svg) { width: 24px; height: 24px; }
-.rep-modal h3 {
-  font-family: var(--font-serif); font-style: italic; font-weight: 500;
-  font-size: 20px; margin: 0 0 6px; color: var(--fg1);
-}
-.rep-modal p {
-  font-size: 13.5px; color: var(--fg2); line-height: 1.5; margin: 0 0 18px;
-}
-.rep-modal-btn {
-  width: 100%;
-  background: var(--terracotta); color: var(--crema-100);
-  border: none; border-radius: 12px;
-  padding: 12px; font: inherit; font-size: 14px; font-weight: 600;
-  cursor: pointer;
-  transition: background var(--dur);
-}
-.rep-modal-btn:hover { background: var(--terracotta-700); }
-
-/* reduced motion */
 @media (prefers-reduced-motion: reduce) {
-  .rep-kpi-spark span, .rep-heat-cell,
-  .rep-bar, .rep-dish-fill, .rep-paybar span { animation: none !important; transition: none !important; }
+  .rep-bar, .rep-dish-fill { transition: none !important; }
 }
 </style>
