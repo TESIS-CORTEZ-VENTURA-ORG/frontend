@@ -42,3 +42,14 @@ export function elapsed(isoDate: string): string {
   const h = Math.floor(mins / 60)
   return `${h} h ${mins % 60} min`
 }
+
+/**
+ * Mensaje legible de un error de `$fetch`. El BFF propaga el mensaje del backend
+ * en `statusMessage`/`data.message` (p. ej. el 409 de borrar-con-hijos); si no
+ * hay mensaje útil se usa el `fallback`.
+ */
+export function errorMessage(error: unknown, fallback: string): string {
+  const e = error as { statusMessage?: string, data?: { message?: string, statusMessage?: string } }
+  const msg = e?.data?.message ?? e?.data?.statusMessage ?? e?.statusMessage
+  return msg && msg !== 'Error del backend' ? msg : fallback
+}

@@ -11,7 +11,7 @@ export default defineNuxtConfig({
     '@vite-pwa/nuxt',
   ],
 
-  css: ['~/assets/css/main.css'],
+  css: ['~/assets/css/main.css', '~/assets/css/admin-catalog.css'],
 
   // TP1 es light-only; el color mode de Nuxt UI queda desactivado
   ui: { colorMode: false },

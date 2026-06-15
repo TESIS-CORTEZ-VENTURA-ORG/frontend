@@ -3,6 +3,11 @@ definePageMeta({ layout: 'app' })
 useSeoMeta({ title: 'Ajustes del negocio — GastronomIA' })
 
 const { data: settings } = useAppSettings()
+const { user } = useUserSession()
+
+// Catálogo (E02) es configuración de gestión: owner/manager. El backend
+// devuelve 403 a staff igualmente; aquí solo se ocultan las tarjetas.
+const canManageCatalog = computed(() => user.value?.role === 'owner' || user.value?.role === 'manager')
 
 interface SettingsEntry {
   icon: string
@@ -18,6 +23,13 @@ const entries: SettingsEntry[] = [
   { icon: 'i-lucide-credit-card', label: 'Métodos de pago', sub: 'Efectivo, tarjeta, Yape y Plin', to: '/app/settings/payments' },
   { icon: 'i-lucide-layout-grid', label: 'Mesas y áreas', sub: 'Zonas del salón y número de mesas', to: '/app/settings/tables' },
   { icon: 'i-lucide-percent', label: 'Impuestos y comprobantes', sub: 'IGV y series de boleta y factura', to: '/app/settings/tax' },
+]
+
+const catalogEntries: SettingsEntry[] = [
+  { icon: 'i-lucide-ruler', label: 'Unidades de medida', sub: 'Kg, g, L, unidad y factores de conversión', to: '/app/settings/units' },
+  { icon: 'i-lucide-folder-tree', label: 'Categorías de insumo', sub: 'Clasifica tus insumos en categorías', to: '/app/settings/catalog-categories' },
+  { icon: 'i-lucide-truck', label: 'Proveedores', sub: 'RUC, contacto, lead time y pago', to: '/app/settings/suppliers' },
+  { icon: 'i-lucide-link', label: 'Insumos y proveedores', sub: 'Precios y proveedor preferido por insumo', to: '/app/settings/product-suppliers' },
 ]
 
 const initials = computed(() =>
@@ -58,6 +70,25 @@ const initials = computed(() =>
         <UIcon name="i-lucide-chevron-right" class="settings-chevron" aria-hidden="true" />
       </NuxtLink>
     </div>
+
+    <template v-if="canManageCatalog">
+      <div class="section-eyebrow">Catálogo</div>
+      <div class="settings-list">
+        <NuxtLink
+          v-for="entry in catalogEntries"
+          :key="entry.to"
+          :to="entry.to"
+          class="settings-item"
+        >
+          <span class="settings-ico" aria-hidden="true"><UIcon :name="entry.icon" /></span>
+          <span class="settings-text">
+            <span class="settings-label">{{ entry.label }}</span>
+            <span class="settings-sub">{{ entry.sub }}</span>
+          </span>
+          <UIcon name="i-lucide-chevron-right" class="settings-chevron" aria-hidden="true" />
+        </NuxtLink>
+      </div>
+    </template>
   </div>
 </template>
 
