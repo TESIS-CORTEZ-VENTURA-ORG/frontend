@@ -108,3 +108,45 @@ export async function backendFetch<T>(
     throw createError({ statusCode: status, statusMessage: message, data: { message } })
   }
 }
+
+/**
+ * Reenvía una descarga `text/csv` del backend a través del BFF (E07 · HU-07-10,
+ * `?format=csv`). Pide el cuerpo CRUDO (`responseType: 'text'`, sin parsear como
+ * JSON), copia las cabeceras de descarga del backend (`Content-Type` y
+ * `Content-Disposition` → nombre de archivo) a la respuesta y devuelve el cuerpo
+ * tal cual. El RBAC del backend corre antes (staff → 403 también para CSV).
+ */
+export async function proxyCsv(
+  event: H3Event,
+  path: string,
+  query: Record<string, unknown> = {},
+): Promise<string> {
+  const base = backendBase(event)
+  const session = await getUserSession(event)
+  const token = session.secure?.accessToken
+  if (!token) {
+    throw createError({ statusCode: 401, statusMessage: 'No autenticado' })
+  }
+  try {
+    const csv = await $fetch<string>(`${base}${path}`, {
+      query,
+      responseType: 'text',
+      headers: { Authorization: `Bearer ${token}`, Accept: 'text/csv' },
+      onResponse({ response }) {
+        // Copia las cabeceras de descarga del backend a la respuesta del BFF.
+        const disposition = response.headers.get('content-disposition')
+        setResponseHeader(event, 'content-type', 'text/csv; charset=utf-8')
+        if (disposition) setResponseHeader(event, 'content-disposition', disposition)
+      },
+    })
+    return csv
+  } catch (error) {
+    const err = error as {
+      statusCode?: number
+      data?: { error?: { message?: string }, message?: string }
+    }
+    const status = err.statusCode ?? 502
+    const message = err.data?.error?.message ?? err.data?.message ?? 'Error del backend'
+    throw createError({ statusCode: status, statusMessage: message, data: { message } })
+  }
+}
