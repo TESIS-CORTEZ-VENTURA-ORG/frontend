@@ -421,6 +421,11 @@ watch(showDelete, (open) => {
         </div>
       </section>
 
+      <!-- ============ Modificadores + disponibilidad (HU-02-11 / HU-02-13) ============ -->
+      <section v-if="isDish" class="rd-section" aria-label="Modificadores y disponibilidad">
+        <RecipeExtras :recipe-id="recipeId" />
+      </section>
+
       <div class="rd-bottom-space" />
 
       <!-- ============ Barra de acciones ============ -->

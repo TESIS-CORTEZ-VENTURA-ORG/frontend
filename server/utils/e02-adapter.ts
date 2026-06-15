@@ -271,3 +271,97 @@ export async function deleteRecipe(event: H3Event, id: string): Promise<void> {
   }
   await backendFetch<Envelope<unknown>>(event, `/api/recipes/${id}`, { method: 'DELETE' })
 }
+
+// ---- Modificadores (HU-02-11) y disponibilidad (HU-02-13) ----
+// Cuelgan del MenuItem en el backend; el frontend los gestiona desde el plato (recipeId).
+
+interface BeModifier { id: string, name: string, priceDelta: string, required: boolean, position: number }
+interface BeAvailability {
+  id: string
+  dayOfWeek: number | null
+  startMinute: number
+  endMinute: number
+}
+export interface ModifierView { id: string, name: string, priceDelta: number, required: boolean, position: number }
+export interface AvailabilityView {
+  id: string
+  dayOfWeek: number | null
+  startMinute: number
+  endMinute: number
+}
+
+/** Resuelve el MenuItem (plato vendible) de una receta. 400 si la receta no es plato. */
+async function requireMenuItemId(event: H3Event, recipeId: string): Promise<string> {
+  const items = await backendFetch<Envelope<BeMenuItem[]>>(event, '/api/menu/items')
+  const item = items.data.find(it => it.recipeId === recipeId)
+  if (!item) {
+    throw createError({
+      statusCode: 400,
+      statusMessage: 'La receta no es un plato vendible (sin precio de venta)',
+    })
+  }
+  return item.id
+}
+
+export async function listModifiers(event: H3Event, recipeId: string): Promise<ModifierView[]> {
+  const items = await backendFetch<Envelope<BeMenuItem[]>>(event, '/api/menu/items')
+  const item = items.data.find(it => it.recipeId === recipeId)
+  if (!item) return [] // sub-receta: sin modificadores
+  const res = await backendFetch<Envelope<BeModifier[]>>(event, `/api/menu/items/${item.id}/modifiers`)
+  return res.data.map(m => ({
+    id: m.id,
+    name: m.name,
+    priceDelta: num(m.priceDelta),
+    required: m.required,
+    position: m.position,
+  }))
+}
+
+export async function addModifier(
+  event: H3Event,
+  recipeId: string,
+  body: { name: string, priceDelta?: number, required?: boolean },
+): Promise<ModifierView> {
+  const itemId = await requireMenuItemId(event, recipeId)
+  const res = await backendFetch<Envelope<BeModifier>>(event, `/api/menu/items/${itemId}/modifiers`, {
+    method: 'POST',
+    body,
+  })
+  const m = res.data
+  return { id: m.id, name: m.name, priceDelta: num(m.priceDelta), required: m.required, position: m.position }
+}
+
+export async function removeModifier(event: H3Event, modifierId: string): Promise<void> {
+  await backendFetch<Envelope<unknown>>(event, `/api/menu/modifiers/${modifierId}`, { method: 'DELETE' })
+}
+
+export async function listAvailability(event: H3Event, recipeId: string): Promise<AvailabilityView[]> {
+  const items = await backendFetch<Envelope<BeMenuItem[]>>(event, '/api/menu/items')
+  const item = items.data.find(it => it.recipeId === recipeId)
+  if (!item) return []
+  const res = await backendFetch<Envelope<BeAvailability[]>>(event, `/api/menu/items/${item.id}/availability`)
+  return res.data.map(w => ({
+    id: w.id,
+    dayOfWeek: w.dayOfWeek,
+    startMinute: w.startMinute,
+    endMinute: w.endMinute,
+  }))
+}
+
+export async function addAvailability(
+  event: H3Event,
+  recipeId: string,
+  body: { dayOfWeek?: number | null, startMinute: number, endMinute: number },
+): Promise<AvailabilityView> {
+  const itemId = await requireMenuItemId(event, recipeId)
+  const res = await backendFetch<Envelope<BeAvailability>>(event, `/api/menu/items/${itemId}/availability`, {
+    method: 'POST',
+    body,
+  })
+  const w = res.data
+  return { id: w.id, dayOfWeek: w.dayOfWeek, startMinute: w.startMinute, endMinute: w.endMinute }
+}
+
+export async function removeAvailability(event: H3Event, availabilityId: string): Promise<void> {
+  await backendFetch<Envelope<unknown>>(event, `/api/menu/availability/${availabilityId}`, { method: 'DELETE' })
+}
