@@ -17,6 +17,12 @@ export interface Ingredient {
   stock: number
   minStock: number
   updatedAt: string
+  /**
+   * El stock/mínimos los gobierna Inventario (E05). Cuando los datos vienen del
+   * catálogo (E02) sin inventario aún, este flag es `true` y la UI muestra
+   * "pendiente" en vez de un número engañoso.
+   */
+  stockPending?: boolean
 }
 
 export interface RecipeItem {

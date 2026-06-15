@@ -1,8 +1,11 @@
-export default defineEventHandler((event) => {
-  const db = useMockDb()
-  const { q, category, kind } = getQuery(event)
+import { listRecipes } from '../../utils/e02-adapter'
 
-  let recipes = db.recipes
+// Proxy autenticado → backend (Recipe + MenuItem). Filtros q/category/kind se
+// aplican aquí porque el backend devuelve el catálogo completo del tenant.
+export default defineEventHandler(async (event) => {
+  const { q, category, kind } = getQuery(event)
+  let recipes = await listRecipes(event)
+
   if (typeof category === 'string' && category !== 'Todas') {
     recipes = recipes.filter(r => r.category === category)
   }

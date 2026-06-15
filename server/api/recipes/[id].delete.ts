@@ -1,10 +1,10 @@
-export default defineEventHandler((event) => {
-  const db = useMockDb()
+import { deleteRecipe } from '../../utils/e02-adapter'
+
+export default defineEventHandler(async (event) => {
   const id = getRouterParam(event, 'id')
-  const idx = db.recipes.findIndex(r => r.id === id)
-  if (idx === -1) {
-    throw createError({ statusCode: 404, statusMessage: 'Receta no encontrada' })
+  if (!id) {
+    throw createError({ statusCode: 400, statusMessage: 'Falta el id' })
   }
-  db.recipes.splice(idx, 1)
+  await deleteRecipe(event, id)
   return ok(null)
 })

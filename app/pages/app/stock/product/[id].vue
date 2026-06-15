@@ -59,12 +59,15 @@ type StockStatus = 'crit' | 'low' | 'ok'
 const status = computed<StockStatus>(() => {
   const p = product.value
   if (!p) return 'ok'
+  if (p.stockPending) return 'ok' // el stock lo gobierna Inventario (E05)
   if (p.stock <= p.minStock * 0.5) return 'crit'
   if (p.stock < p.minStock) return 'low'
   return 'ok'
 })
-const statusLabel = computed(() =>
-  status.value === 'crit' ? 'Stock Crítico' : status.value === 'low' ? 'Stock Bajo' : 'Stock OK')
+const statusLabel = computed(() => {
+  if (product.value?.stockPending) return 'Stock en Inventario (E05)'
+  return status.value === 'crit' ? 'Stock Crítico' : status.value === 'low' ? 'Stock Bajo' : 'Stock OK'
+})
 const statusEmoji = computed(() =>
   status.value === 'crit' ? '🔴' : status.value === 'low' ? '🟡' : '🟢')
 
@@ -298,7 +301,8 @@ async function addToShopping(qty?: number): Promise<void> {
             <div class="pd-kv">
               <div class="label">Stock actual</div>
               <div class="value" :class="{ danger: status === 'crit' }">
-                {{ product.stock }}<span class="unit"> {{ product.unit }}</span>
+                <template v-if="product.stockPending"><span class="nocost-dash">— pendiente</span></template>
+                <template v-else>{{ product.stock }}<span class="unit"> {{ product.unit }}</span></template>
               </div>
             </div>
             <div class="pd-kv">
@@ -313,7 +317,8 @@ async function addToShopping(qty?: number): Promise<void> {
             <div class="pd-kv">
               <div class="label">Mínimo</div>
               <div class="value">
-                {{ product.minStock }}<span class="unit"> {{ product.unit }}</span>
+                <template v-if="product.stockPending"><span class="nocost-dash">—</span></template>
+                <template v-else>{{ product.minStock }}<span class="unit"> {{ product.unit }}</span></template>
               </div>
             </div>
             <div class="pd-kv">

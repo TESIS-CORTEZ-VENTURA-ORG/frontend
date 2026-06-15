@@ -18,6 +18,7 @@ const inShopping = computed(() => new Set((shopping.value ?? []).map(s => s.ingr
 type StockStatus = 'ok' | 'low' | 'crit'
 
 function statusOf(i: Ingredient): StockStatus {
+  if (i.stockPending) return 'ok' // stock vive en Inventario (E05): sin falsas alarmas
   if (i.minStock <= 0) return 'ok'
   const ratio = i.stock / i.minStock
   if (ratio < 1) return 'crit'
@@ -87,11 +88,13 @@ const shoppingTotal = computed(() =>
 )
 
 function fmtStock(i: Ingredient): string {
+  if (i.stockPending) return '—'
   if (i.unit === 'kg' && i.stock < 1) return `${Math.round(i.stock * 1000)} g`
   return `${i.stock} ${i.unit}`
 }
 
 function fmtMin(i: Ingredient): string {
+  if (i.stockPending) return 'mín. pendiente'
   if (i.unit === 'kg' && i.minStock < 1) return `${Math.round(i.minStock * 1000)} g`
   return `${i.minStock} ${i.unit}`
 }
