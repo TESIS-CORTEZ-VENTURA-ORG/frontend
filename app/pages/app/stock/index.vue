@@ -107,6 +107,40 @@ async function orderItem(i: Ingredient): Promise<void> {
   await addShopping({ ingredientId: i.id })
   toast.add({ title: `${i.name} agregado a Lista de Compras`, icon: 'i-lucide-check-circle-2' })
 }
+
+/* ===== Carga masiva CSV (HU-02-02) ===== */
+type StockImportReport = {
+  total: number
+  created: number
+  updated: number
+  failed: number
+  errors: { line: number, message: string }[]
+}
+const { mutateAsync: importIngredients, isLoading: importing } = useImportIngredients()
+const showImport = ref(false)
+const importReport = ref<StockImportReport | null>(null)
+const fileInput = ref<HTMLInputElement | null>(null)
+
+async function onImportFile(e: Event): Promise<void> {
+  const input = e.target as HTMLInputElement
+  const file = input.files?.[0]
+  if (!file) return
+  try {
+    const content = await file.text()
+    importReport.value = await importIngredients(content)
+    const r = importReport.value
+    toast.add({
+      title: `Importados: ${r.created} nuevos · ${r.updated} actualizados`,
+      icon: 'i-lucide-check-circle-2',
+    })
+  }
+  catch {
+    toast.add({ title: 'No se pudo importar el archivo', icon: 'i-lucide-alert-triangle', color: 'error' })
+  }
+  finally {
+    input.value = '' // permite re-subir el mismo archivo
+  }
+}
 </script>
 
 <template>
@@ -120,9 +154,14 @@ async function orderItem(i: Ingredient): Promise<void> {
           Tu inventario en tiempo real
         </div>
       </div>
-      <NuxtLink to="/app/stock/movements" class="stk-icon-btn" aria-label="Historial de movimientos">
-        <UIcon name="i-lucide-history" />
-      </NuxtLink>
+      <div class="stk-hdr-actions">
+        <button type="button" class="stk-icon-btn" aria-label="Importar insumos (CSV)" @click="showImport = true">
+          <UIcon name="i-lucide-upload" />
+        </button>
+        <NuxtLink to="/app/stock/movements" class="stk-icon-btn" aria-label="Historial de movimientos">
+          <UIcon name="i-lucide-history" />
+        </NuxtLink>
+      </div>
     </header>
 
     <!-- Search + scan -->
@@ -294,10 +333,65 @@ async function orderItem(i: Ingredient): Promise<void> {
         />
       </div>
     </section>
+
+    <!-- Carga masiva CSV (HU-02-02) -->
+    <UiBottomSheet v-model="showImport" title="Importar insumos (CSV)">
+      <div class="stk-import">
+        <p class="stk-import-hint">
+          Sube un archivo <b>CSV</b> con cabecera <code>sku, name, type, unit, unitCost, category</code>.
+          La carga es <b>idempotente</b>: re-subir actualiza por SKU, no duplica.
+        </p>
+        <label class="stk-import-drop" :class="{ busy: importing }">
+          <UIcon :name="importing ? 'i-lucide-loader-circle' : 'i-lucide-upload'" :class="{ spin: importing }" />
+          <span>{{ importing ? 'Importando…' : 'Elegir archivo CSV' }}</span>
+          <input
+            ref="fileInput"
+            type="file"
+            accept=".csv,text/csv"
+            :disabled="importing"
+            hidden
+            @change="onImportFile"
+          >
+        </label>
+
+        <div v-if="importReport" class="stk-import-report">
+          <div class="stk-import-stats">
+            <span class="ok">{{ importReport.created }} nuevos</span>
+            <span class="upd">{{ importReport.updated }} actualizados</span>
+            <span v-if="importReport.failed > 0" class="err">{{ importReport.failed }} con error</span>
+          </div>
+          <ul v-if="importReport.errors.length" class="stk-import-errors">
+            <li v-for="(e, idx) in importReport.errors" :key="idx">
+              <b>Línea {{ e.line }}:</b> {{ e.message }}
+            </li>
+          </ul>
+        </div>
+      </div>
+    </UiBottomSheet>
   </div>
 </template>
 
 <style scoped>
+.stk-hdr-actions { display: flex; gap: 8px; align-items: center; }
+.stk-import { display: flex; flex-direction: column; gap: 14px; padding: 4px 2px; }
+.stk-import-hint { font-size: 13px; color: var(--fg2); line-height: 1.5; }
+.stk-import-hint code { font-family: var(--font-mono); font-size: 11.5px; background: var(--bg2); padding: 1px 5px; border-radius: 5px; }
+.stk-import-drop {
+  display: flex; align-items: center; justify-content: center; gap: 10px;
+  padding: 22px; border: 1.5px dashed var(--border); border-radius: 14px;
+  cursor: pointer; font-weight: 600; color: var(--fg1); background: var(--bg2);
+}
+.stk-import-drop.busy { opacity: 0.7; cursor: default; }
+.stk-import-drop .spin { animation: stk-spin 0.9s linear infinite; }
+@keyframes stk-spin { to { transform: rotate(360deg); } }
+.stk-import-stats { display: flex; flex-wrap: wrap; gap: 8px; }
+.stk-import-stats span { font-size: 12.5px; font-weight: 700; padding: 4px 10px; border-radius: 999px; }
+.stk-import-stats .ok { background: color-mix(in srgb, var(--success) 16%, transparent); color: var(--success); }
+.stk-import-stats .upd { background: var(--bg2); color: var(--fg2); }
+.stk-import-stats .err { background: color-mix(in srgb, var(--danger) 16%, transparent); color: var(--danger); }
+.stk-import-errors { margin-top: 4px; display: flex; flex-direction: column; gap: 4px; max-height: 180px; overflow: auto; }
+.stk-import-errors li { font-size: 12px; color: var(--fg2); }
+.stk-import-errors b { color: var(--danger); }
 .stk-screen {
   max-width: 720px;
   margin: 0 auto;

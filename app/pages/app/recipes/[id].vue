@@ -47,7 +47,8 @@ function itemAlert(it: RecipeItem): string | null {
 
 /* ===== Tendencia (mock visual, sin histórico real) ===== */
 const isDish = computed(() => recipe.value?.kind !== 'sub_recipe')
-const isAtRisk = computed(() => isDish.value && (recipe.value?.marginPct ?? 0) < 20)
+// HU-02-10: el plato se marca "en riesgo" cuando el margen cae por debajo de 25%.
+const isAtRisk = computed(() => isDish.value && (recipe.value?.marginPct ?? 0) < 25)
 const marginPrev = computed(() => {
   const m = recipe.value?.marginPct ?? 0
   return isAtRisk.value ? m + 8 : Math.max(0, m - 3)

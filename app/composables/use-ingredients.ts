@@ -22,3 +22,25 @@ export function useUpdateIngredient() {
     onSettled: () => cache.invalidateQueries({ key: ['ingredients'] }),
   })
 }
+
+// HU-02-02 · Carga masiva de insumos vía CSV. Devuelve el reporte (creados/
+// actualizados/errores con línea exacta). Es idempotente (rerun → actualiza).
+export interface ImportReport {
+  total: number
+  created: number
+  updated: number
+  failed: number
+  errors: { line: number, message: string }[]
+}
+
+export function useImportIngredients() {
+  const cache = useQueryCache()
+  return useMutation({
+    mutation: (content: string) =>
+      $fetch<ApiResponse<ImportReport>>('/api/ingredients/import', {
+        method: 'POST',
+        body: { content },
+      }).then(r => r.data),
+    onSettled: () => cache.invalidateQueries({ key: ['ingredients'] }),
+  })
+}
