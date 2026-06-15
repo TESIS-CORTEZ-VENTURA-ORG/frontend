@@ -1,6 +1,10 @@
 import { z } from 'zod'
 import type { Sale } from '#shared/types/domain'
 
+// NOTA: este handler sigue sobre el MOCK a propósito. El cobro y la emisión de
+// comprobantes son E04 (billing), que el backend aún no expone. Cuando exista,
+// se reemplaza por un proxy `backendFetch` (vía pos-adapter), igual que tables/orders.
+
 const paySchema = z.object({
   payments: z.array(z.object({
     method: z.enum(['cash', 'card', 'yape', 'plin']),

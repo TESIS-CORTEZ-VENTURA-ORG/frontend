@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { patchTable } from '../../utils/pos-adapter'
 
 const patchTableSchema = z.object({
   status: z.enum(['free', 'occupied', 'bill', 'reserved']).optional(),
@@ -6,23 +7,11 @@ const patchTableSchema = z.object({
   guests: z.number().int().positive().optional(),
 })
 
+// Proxy → backend E03: PATCH /api/tables/:id {status}. Caso real: pedir cuenta
+// (status:'bill') o liberar mesa ('free'). waiter/guests no tienen campo backend.
 export default defineEventHandler(async (event) => {
-  const db = useMockDb()
-  const id = getRouterParam(event, 'id')
-  const table = db.tables.find(t => t.id === id)
-  if (!table) {
-    throw createError({ statusCode: 404, statusMessage: 'Mesa no encontrada' })
-  }
-
+  const id = getRouterParam(event, 'id') as string
   const body = await readValidatedBody(event, patchTableSchema.parse)
-  Object.assign(table, body)
-
-  if (body.status === 'free') {
-    table.openedAt = undefined
-    table.orderId = undefined
-    table.guests = undefined
-    table.waiter = undefined
-  }
-
+  const table = await patchTable(event, id, body)
   return ok(table)
 })

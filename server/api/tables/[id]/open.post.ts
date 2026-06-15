@@ -1,39 +1,16 @@
 import { z } from 'zod'
-import type { Order } from '#shared/types/domain'
+import { openTable } from '../../../utils/pos-adapter'
 
 const openTableSchema = z.object({
   guests: z.number().int().positive().default(2),
   waiter: z.string().optional(),
 })
 
+// Proxy → backend E03: abrir mesa = POST /api/orders {tableId, guests}; luego
+// devuelve {table, order} fresco. El mesero lo toma el backend del JWT.
 export default defineEventHandler(async (event) => {
-  const db = useMockDb()
-  const id = getRouterParam(event, 'id')
-  const table = db.tables.find(t => t.id === id)
-  if (!table) {
-    throw createError({ statusCode: 404, statusMessage: 'Mesa no encontrada' })
-  }
-  if (table.status === 'occupied' || table.status === 'bill') {
-    throw createError({ statusCode: 409, statusMessage: 'La mesa ya está ocupada' })
-  }
-
+  const id = getRouterParam(event, 'id') as string
   const body = await readValidatedBody(event, openTableSchema.parse)
-
-  const order: Order = {
-    id: nextId(db, 'ord'),
-    tableId: table.id,
-    openedAt: new Date().toISOString(),
-    items: [],
-    payments: [],
-    status: 'open',
-  }
-  db.orders.push(order)
-
-  table.status = 'occupied'
-  table.openedAt = order.openedAt
-  table.orderId = order.id
-  table.guests = body.guests
-  table.waiter = body.waiter ?? table.waiter
-
-  return ok({ table, order })
+  const detail = await openTable(event, id, body)
+  return ok(detail)
 })

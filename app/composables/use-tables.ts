@@ -79,8 +79,21 @@ export function usePatchOrder() {
       discount?: OrderDiscount | null
       itemUpdates?: OrderItemUpdate[]
       status?: 'open' | 'void'
+      // HU-03-11: razón al anular (status:'void'). El BFF la mapea a /void {reason}.
+      voidReason?: string
     }) =>
       $fetch<ApiResponse<Order>>(`/api/orders/${orderId}`, { method: 'PATCH', body: payload })
+        .then(r => r.data),
+    onSettled: invalidate,
+  })
+}
+
+/** HU-03-06 · Enviar la comanda a cocina (rutea ítems a estaciones en el backend). */
+export function useSendToKitchen() {
+  const invalidate = useInvalidateTables()
+  return useMutation({
+    mutation: ({ orderId }: { orderId: string }) =>
+      $fetch<ApiResponse<Order>>(`/api/orders/${orderId}/send-to-kitchen`, { method: 'POST' })
         .then(r => r.data),
     onSettled: invalidate,
   })

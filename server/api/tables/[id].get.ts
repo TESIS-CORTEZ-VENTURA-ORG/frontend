@@ -1,10 +1,8 @@
-export default defineEventHandler((event) => {
-  const db = useMockDb()
-  const id = getRouterParam(event, 'id')
-  const table = db.tables.find(t => t.id === id)
-  if (!table) {
-    throw createError({ statusCode: 404, statusMessage: 'Mesa no encontrada' })
-  }
-  const order = table.orderId ? db.orders.find(o => o.id === table.orderId) ?? null : null
-  return ok({ table, order })
+import { getTableDetail } from '../../utils/pos-adapter'
+
+// Proxy autenticado → backend E03 (GET /api/tables/:id → {table, order}).
+export default defineEventHandler(async (event) => {
+  const id = getRouterParam(event, 'id') as string
+  const detail = await getTableDetail(event, id)
+  return ok(detail)
 })
