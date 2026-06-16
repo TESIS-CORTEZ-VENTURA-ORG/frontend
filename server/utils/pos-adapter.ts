@@ -36,6 +36,7 @@ interface BeTableView {
   openedAt: string | null
   guests: number | null
   waiterId: string | null
+  waiterName: string | null
 }
 interface BeOrderItemView {
   id: string
@@ -145,9 +146,10 @@ function toDiningTable(t: BeTableView, index: number): DiningTable {
     status: toTableStatus(t.status),
     openedAt: t.openedAt ?? undefined,
     orderId: t.currentOrderId ?? undefined,
-    // TODO waiter name: el backend solo expone `waiterId` (uuid). Surfacear el
-    // nombre del mesero requiere una vista backend (join users) → pendiente.
-    waiter: undefined,
+    // `TableView` del backend ya resuelve el nombre del mesero (join a users) en
+    // `waiterName` (null si la mesa está libre / sin mesero). El frontend solo
+    // necesita el nombre para el mapa/mesa → `waiterId` (uuid) no se surfacea.
+    waiter: t.waiterName ?? undefined,
     guests: t.guests ?? undefined,
   }
 }

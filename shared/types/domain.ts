@@ -226,9 +226,15 @@ export interface PurchaseOrder {
 
 export type NotificationKind = 'critical' | 'warning' | 'info' | 'success'
 
+/** Tipo de dominio del backend (E10, `notificationTypeSchema`). */
+export type NotificationType = 'low_stock' | 'order_ready' | 'bill_requested' | 'system'
+
 export interface AppNotification {
   id: string
+  /** Severidad visual (icono/color). Derivada del `type` del backend. */
   kind: NotificationKind
+  /** Tipo de dominio real del backend (para etiqueta/filtrado). */
+  type: NotificationType
   title: string
   body: string
   date: string

@@ -16,6 +16,15 @@ const KIND_META: Record<NotificationKind, { icon: string, cls: string }> = {
   success: { icon: 'i-lucide-check-circle-2', cls: 'success' },
 }
 
+// Etiqueta corta por TIPO real del backend (lo que ahora carga `AppNotification.type`),
+// para que la fila identifique el origen además de la severidad (icono/color del `kind`).
+const TYPE_LABEL: Record<NotificationType, string> = {
+  low_stock: 'Stock',
+  bill_requested: 'Cuenta',
+  order_ready: 'Cocina',
+  system: 'Sistema',
+}
+
 const all = computed(() => notifications.value ?? [])
 const unread = computed(() => all.value.filter(n => !n.read))
 const read = computed(() => all.value.filter(n => n.read))
@@ -115,7 +124,10 @@ async function toggleInApp(type: NotificationType, value: boolean): Promise<void
           >
             <span class="ntf-ico" aria-hidden="true"><UIcon :name="KIND_META[n.kind].icon" /></span>
             <span class="ntf-body">
-              <span class="ntf-title">{{ n.title }}</span>
+              <span class="ntf-title">
+                {{ n.title }}
+                <span class="ntf-type">{{ TYPE_LABEL[n.type] }}</span>
+              </span>
               <span class="ntf-text">{{ n.body }}</span>
               <span v-if="n.actionLabel" class="ntf-action">{{ n.actionLabel }} <UIcon name="i-lucide-arrow-right" /></span>
             </span>
@@ -139,7 +151,10 @@ async function toggleInApp(type: NotificationType, value: boolean): Promise<void
           >
             <span class="ntf-ico" aria-hidden="true"><UIcon :name="KIND_META[n.kind].icon" /></span>
             <span class="ntf-body">
-              <span class="ntf-title">{{ n.title }}</span>
+              <span class="ntf-title">
+                {{ n.title }}
+                <span class="ntf-type">{{ TYPE_LABEL[n.type] }}</span>
+              </span>
               <span class="ntf-text">{{ n.body }}</span>
             </span>
             <span class="ntf-right">
@@ -209,6 +224,15 @@ async function toggleInApp(type: NotificationType, value: boolean): Promise<void
 .ntf-row.success .ntf-ico { background: var(--success-bg); color: var(--oliva-700); }
 .ntf-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
 .ntf-title { font-size: 13.5px; font-weight: 600; color: var(--fg1); line-height: 1.3; }
+.ntf-type {
+  display: inline-block;
+  font-size: 9.5px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase;
+  color: var(--fg3);
+  background: var(--crema-200);
+  padding: 1px 6px; border-radius: 999px;
+  vertical-align: middle;
+  margin-left: 6px;
+}
 .ntf-text { font-size: 12.5px; color: var(--fg2); line-height: 1.45; }
 .ntf-action {
   display: inline-flex; align-items: center; gap: 4px;

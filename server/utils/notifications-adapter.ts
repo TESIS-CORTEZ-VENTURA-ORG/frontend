@@ -1,4 +1,4 @@
-import type { AppNotification, NotificationKind } from '#shared/types/domain'
+import type { AppNotification, NotificationKind, NotificationType } from '#shared/types/domain'
 
 /**
  * Adaptador E10 (anti-corruption layer del BFF). El backend NestJS gobierna las
@@ -10,8 +10,12 @@ import type { AppNotification, NotificationKind } from '#shared/types/domain'
 
 // ---- Formas del backend (notifications.service.ts) ----
 
-/** Tipos del dominio (notification.ts del backend, `notificationTypeSchema`). */
-export type BeNotificationType = 'low_stock' | 'order_ready' | 'bill_requested' | 'system'
+/**
+ * Tipos del dominio (notification.ts del backend, `notificationTypeSchema`).
+ * Idéntico al `NotificationType` del frontend (mismo enum) → se reexporta para
+ * que el resto del adaptador siga usando un único nombre.
+ */
+export type BeNotificationType = NotificationType
 
 export interface BeNotificationView {
   id: string
@@ -54,6 +58,16 @@ const KIND_BY_TYPE: Record<BeNotificationType, NotificationKind> = {
 
 function toKind(type: string): NotificationKind {
   return KIND_BY_TYPE[type as BeNotificationType] ?? 'info'
+}
+
+/**
+ * Coerción del `type` del backend al enum del frontend. El backend lo valida con
+ * el mismo `notificationTypeSchema`, pero ante un valor inesperado (versión nueva
+ * del backend) se cae a `system` (genérico) en lugar de filtrar el tipo, para que
+ * la pantalla siga mostrando una etiqueta/ícono coherentes.
+ */
+function toType(type: string): NotificationType {
+  return type in KIND_BY_TYPE ? (type as NotificationType) : 'system'
 }
 
 /** Extrae un id de string del `data` (JSON libre) por cualquiera de varias claves. */
@@ -99,6 +113,7 @@ export function toFrontendNotification(n: BeNotificationView): AppNotification {
   return {
     id: n.id,
     kind: toKind(n.type),
+    type: toType(n.type),
     title: n.title,
     body: n.body,
     date: n.createdAt,
