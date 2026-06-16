@@ -1,51 +1,26 @@
 <script setup lang="ts">
+// Catch-all del área in-app. Todos los módulos del backlog (pos, stock, recetas,
+// comprobantes, ajustes, perfil, ayuda, chat, datos, costeo, cocina, migración…)
+// YA tienen pantalla real con su propia ruta → este fallback solo cubre rutas
+// genuinamente inexistentes (404 dentro de /app), sin prometer "próximamente".
 definePageMeta({ layout: 'app' })
 
-interface UpcomingScreen {
-  title: string
-  sub: string
-  icon: string
-  epic: string
-}
-
-// Mapa de módulos del backlog (frontend_context.md §8) aún no construidos
-const SCREENS: Record<string, UpcomingScreen> = {
-  pos: { title: 'Mesas y salón', sub: 'POS, comandas y cocina', icon: 'i-lucide-utensils', epic: 'Sprint 2 · E03' },
-  stock: { title: 'Inventario', sub: 'Stock, movimientos y conteos', icon: 'i-lucide-package', epic: 'Sprint 3 · E05' },
-  chat: { title: 'Chat analítico', sub: 'Pregúntale a tus ventas en español', icon: 'i-lucide-bot', epic: 'Sprint 5 · E09' },
-  recipes: { title: 'Recetas', sub: 'Catálogo, costos y márgenes', icon: 'i-lucide-utensils', epic: 'Sprint 1 · E02' },
-  invoices: { title: 'Comprobantes', sub: 'Ventas y tickets emitidos', icon: 'i-lucide-receipt', epic: 'Sprint 2 · E04' },
-  data: { title: 'Datos', sub: 'Importación y exportación', icon: 'i-lucide-upload', epic: 'Sprint 1 · E11' },
-  settings: { title: 'Ajustes del negocio', sub: 'Horarios, mesas, impuestos, pagos', icon: 'i-lucide-settings', epic: 'Sprint 1 · E01' },
-  profile: { title: 'Perfil', sub: 'Tus datos y preferencias', icon: 'i-lucide-user', epic: 'Sprint 1 · E01' },
-  help: { title: 'Ayuda', sub: 'Centro de soporte', icon: 'i-lucide-circle-help', epic: 'Sprint 4' },
-}
-
 const route = useRoute()
+const attempted = computed(() => `/app/${((route.params.slug as string[] | undefined) ?? []).join('/')}`)
 
-const screen = computed<UpcomingScreen>(() => {
-  const [head] = (route.params.slug as string[] | undefined) ?? []
-  return (head && SCREENS[head]) || {
-    title: 'Pantalla en construcción',
-    sub: 'Este módulo llega en un próximo sprint',
-    icon: 'i-lucide-hammer',
-    epic: 'Backlog',
-  }
-})
-
-useSeoMeta({ title: () => `${screen.value.title} — GastronomIA` })
+useSeoMeta({ title: 'Ruta no encontrada — GastronomIA' })
 </script>
 
 <template>
   <div class="wip">
     <div class="wip-card">
-      <span class="wip-ico" aria-hidden="true"><UIcon :name="screen.icon" /></span>
-      <span class="wip-epic">{{ screen.epic }}</span>
-      <h1 class="wip-title">{{ screen.title }}</h1>
-      <p class="wip-sub">{{ screen.sub }}</p>
+      <span class="wip-ico" aria-hidden="true"><UIcon name="i-lucide-compass" /></span>
+      <span class="wip-epic">Error 404</span>
+      <h1 class="wip-title">Ruta no encontrada</h1>
+      <p class="wip-sub">Este módulo no existe o la dirección es incorrecta.</p>
       <p class="wip-note">
-        Esta pantalla ya está diseñada en el prototipo y se construye
-        siguiendo el orden del backlog.
+        No encontramos <code class="wip-path">{{ attempted }}</code>.
+        Revisa el enlace o vuelve al inicio para seguir navegando.
       </p>
       <UButton to="/app" variant="outline" color="neutral" icon="i-lucide-arrow-left" class="mt-4">
         Volver al inicio
@@ -90,4 +65,10 @@ useSeoMeta({ title: () => `${screen.value.title} — GastronomIA` })
 }
 .wip-sub { font-size: 14px; color: var(--fg2); margin: 6px 0 0; }
 .wip-note { font-size: 12.5px; color: var(--fg3); margin: 12px 0 0; line-height: 1.5; }
+.wip-path {
+  font-family: var(--font-mono); font-size: 11.5px;
+  background: var(--crema-200); color: var(--fg2);
+  padding: 1px 6px; border-radius: 6px;
+  word-break: break-all;
+}
 </style>

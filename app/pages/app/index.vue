@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { useAdminDashboard, useManagerDashboard, useCashierDashboard } from '~/composables/use-reports'
+
 definePageMeta({ layout: 'app' })
 useSeoMeta({ title: 'Inicio — GastronomIA' })
 
@@ -20,14 +22,105 @@ const dateLabel = computed(() => {
   return label.charAt(0).toUpperCase() + label.slice(1)
 })
 
-// Datos mock hasta tener la API (E07 reportes / E08 forecast)
-const sparkBars = [0.4, 0.55, 0.42, 0.7, 0.6, 0.85, 1]
-const occupancy = { active: 14, total: 20, pct: 70 }
+/* ===================== KPIs reales · E07 dashboards =====================
+   Cableado al backend vía los composables de reportes (BFF anti-corruption).
+   Gating por rol idéntico al hub /app/reports: owner → dashboard ejecutivo
+   (admin), manager → operativo (manager), staff → caja del día (cajero, que
+   es `read Sale`, NO 403). La moneda llega como string PEN → se formatea con
+   formatPEN(num()). El owner consulta TAMBIÉN el dashboard del gerente para los
+   widgets operativos (mesas/cuentas) que el ejecutivo no trae. */
+const isOwner = computed(() => user.value?.role === 'owner')
+const isManager = computed(() => user.value?.role === 'manager')
+const canManage = computed(() => isOwner.value || isManager.value)
+
+const num = (s: string | number | undefined | null): number => Number(s ?? 0)
+
+// owner → admin; manager (no owner) → manager; staff → cashier.
+const admin = useAdminDashboard(() => isOwner.value)
+// Operativo (mesas/cocina/cuentas): lo ven owner y manager.
+const manager = useManagerDashboard(() => canManage.value)
+// Caja del día: operativo → lo ve staff (y serviría a cualquiera, pero solo lo pedimos para staff).
+const cashier = useCashierDashboard(() => !canManage.value)
+// Total de mesas del salón (para el % de ocupación). Read Table → todos lo ven.
+const tables = useTables()
+
+// El dashboard "principal" según rol (para loading/error/empty del bloque de KPIs).
+const primary = computed(() => (isOwner.value ? admin : canManage.value ? manager : cashier))
+const kpisLoading = computed(() => primary.value.isLoading.value && !primary.value.data.value)
+const kpisError = computed(() => !!primary.value.error.value)
+
+/* ---- KPI 1 · Venta/ingresos de hoy (todos los roles) ---- */
+const revenueToday = computed<number | null>(() => {
+  if (isOwner.value) return admin.data.value ? num(admin.data.value.revenueToday) : null
+  if (canManage.value) return manager.data.value ? num(manager.data.value.revenueToday) : null
+  return cashier.data.value ? num(cashier.data.value.totalCollected) : null
+})
+const revenueLabel = computed(() => (canManage.value ? 'Venta hoy' : 'Caja de hoy'))
+// Subtítulo del card de ingresos: nº de pedidos/tickets, sin inventar el "vs ayer".
+const revenueSub = computed(() => {
+  if (isOwner.value && admin.data.value) {
+    const n = admin.data.value.ordersToday
+    return `${n} pedido${n === 1 ? '' : 's'} hoy`
+  }
+  if (canManage.value && manager.data.value) {
+    const n = manager.data.value.salesToday
+    return `${n} ticket${n === 1 ? '' : 's'} hoy`
+  }
+  if (cashier.data.value) {
+    const n = cashier.data.value.salesCount
+    return `${n} ticket${n === 1 ? '' : 's'} hoy`
+  }
+  return ''
+})
+
+/* ---- Sparkline · serie de ventas de 7 días (solo admin/owner; manager/staff no la traen) ---- */
+const hasSpark = computed(() => isOwner.value && (admin.data.value?.salesByDay7d?.length ?? 0) > 0)
+const sparkBars = computed<number[]>(() => {
+  const series = admin.data.value?.salesByDay7d ?? []
+  if (!series.length) return []
+  const max = Math.max(1, ...series.map(d => num(d.revenue)))
+  return series.map(d => num(d.revenue) / max)
+})
+
+/* ---- KPI 2 · Mesas activas / ocupación (operativo: owner+manager) ---- */
+const totalTables = computed(() => tables.data.value?.length ?? 0)
+const occupancy = computed(() => {
+  const active = manager.data.value?.openTables ?? 0
+  const total = totalTables.value
+  const pct = total > 0 ? Math.round((active / total) * 100) : 0
+  return { active, total, pct }
+})
+const hasOccupancy = computed(() => canManage.value)
 
 const ringSize = 36
 const ringRadius = (ringSize - 6) / 2
 const ringCircumference = 2 * Math.PI * ringRadius
-const ringOffset = computed(() => ringCircumference * (1 - occupancy.pct / 100))
+const ringOffset = computed(() => ringCircumference * (1 - occupancy.value.pct / 100))
+
+/* ---- KPI 3 · Margen bruto (owner) / Stock bajo (resto operativo) ---- */
+const grossMarginPct = computed<number | null>(() =>
+  isOwner.value && admin.data.value ? num(admin.data.value.grossMarginPct) : null)
+const lowStockCount = computed<number | null>(() => {
+  if (isOwner.value) return admin.data.value ? admin.data.value.lowStockCount : null
+  if (canManage.value) return manager.data.value ? manager.data.value.lowStockCount : null
+  return null
+})
+
+/* ---- KPI 3 (staff) · Ticket promedio ---- */
+const avgTicket = computed<number | null>(() =>
+  !canManage.value && cashier.data.value ? num(cashier.data.value.avgTicket) : null)
+
+/* ---- Top platos de hoy (admin: con contribución; manager: sin) ---- */
+interface TopDish { name: string, qty: number, revenue: number }
+const topDishes = computed<TopDish[]>(() => {
+  if (isOwner.value) {
+    return (admin.data.value?.topDishes ?? []).map(d => ({ name: d.name, qty: d.qty, revenue: num(d.revenue) }))
+  }
+  if (canManage.value) {
+    return (manager.data.value?.topDishesToday ?? []).map(d => ({ name: d.name, qty: d.qty, revenue: num(d.revenue) }))
+  }
+  return []
+})
 
 interface Shortcut {
   icon: string
@@ -41,7 +134,7 @@ interface Shortcut {
 const shortcuts: Shortcut[] = [
   { icon: 'i-lucide-utensils', label: 'Recetas', sub: 'Costos y márgenes', to: '/app/recipes' },
   { icon: 'i-lucide-scan-line', label: 'Escanear factura', sub: 'Magic Upload', to: '/app/data/magic-upload', featured: true },
-  { icon: 'i-lucide-shopping-cart', label: 'Compras', sub: 'S/ 380 hoy', to: '/app/stock/shopping-list' },
+  { icon: 'i-lucide-shopping-cart', label: 'Compras', sub: 'Lista de compra', to: '/app/stock/shopping-list' },
   { icon: 'i-lucide-bar-chart-3', label: 'Reportes', sub: 'KPIs y análisis', to: '/app/reports' },
 ]
 
@@ -76,34 +169,59 @@ function notify(message: string): void {
       </div>
     </header>
 
-    <!-- ============ KPIs ============ -->
+    <!-- ============ KPIs (E07 dashboards) ============ -->
     <section class="section" aria-label="Indicadores de hoy">
       <div class="section-eyebrow">Hoy</div>
-      <div class="kpi-rail" role="list">
+
+      <!-- Error de carga (reintentar) -->
+      <div v-if="kpisError" class="kpi-state">
+        <UIcon name="i-lucide-cloud-off" class="kpi-state-ico" />
+        <p>No se pudieron cargar los indicadores.</p>
+        <button class="btn btn-ghost" @click="primary.refresh()">
+          <UIcon name="i-lucide-rotate-cw" /> Reintentar
+        </button>
+      </div>
+
+      <!-- Skeleton de primera carga -->
+      <div v-else-if="kpisLoading" class="kpi-rail" role="list" aria-busy="true">
+        <div v-for="i in 3" :key="i" class="kpi-card kpi-static kpi-skeleton" aria-hidden="true">
+          <span class="sk sk-eyebrow" />
+          <span class="sk sk-value" />
+          <span class="sk sk-trend" />
+        </div>
+      </div>
+
+      <div v-else class="kpi-rail" role="list">
+        <!-- KPI 1 · Venta / Caja de hoy -->
         <div
           role="listitem"
           class="kpi-card accent kpi-static"
-          aria-label="Venta hoy: 2,450 soles, 12% más que ayer"
+          :aria-label="`${revenueLabel}: ${formatPEN(revenueToday ?? 0)}`"
         >
           <div class="kpi-row-head">
-            <div class="kpi-eyebrow">Venta hoy</div>
+            <div class="kpi-eyebrow">{{ revenueLabel }}</div>
             <UIcon name="i-lucide-trending-up" class="size-3.5 text-(--mostaza-100)" />
           </div>
-          <div class="kpi-value"><span class="currency">S/</span>2,450</div>
-          <div class="kpi-mini" aria-hidden="true">
+          <div class="kpi-value">
+            <span class="currency">S/</span>{{ (revenueToday ?? 0).toLocaleString('es-PE') }}
+          </div>
+          <!-- Sparkline real (solo owner, serie 7d del admin) -->
+          <div v-if="hasSpark" class="kpi-mini" aria-hidden="true">
             <span
               v-for="(h, i) in sparkBars"
               :key="i"
               :class="{ on: i === sparkBars.length - 1 }"
-              :style="{ height: `${h * 100}%`, alignSelf: 'flex-end' }"
+              :style="{ height: `${Math.max(6, h * 100)}%`, alignSelf: 'flex-end' }"
             />
           </div>
           <div class="kpi-trend">
-            <UIcon name="i-lucide-arrow-up-right" /> +12 % vs ayer
+            <UIcon name="i-lucide-calendar-days" /> {{ revenueSub }}
           </div>
         </div>
 
+        <!-- KPI 2 · Mesas activas / ocupación (owner + manager) -->
         <NuxtLink
+          v-if="hasOccupancy"
           role="listitem"
           class="kpi-card"
           to="/app/pos"
@@ -126,24 +244,89 @@ function notify(message: string): void {
           <div class="kpi-trend warm">
             <UIcon name="i-lucide-users" /> {{ occupancy.pct }} % ocupación
           </div>
-          <div class="kpi-meta">2 mesas con cuenta lista</div>
+          <div v-if="manager.data.value" class="kpi-meta">
+            {{ manager.data.value.ordersOpen }} cuenta{{ manager.data.value.ordersOpen === 1 ? '' : 's' }} abierta{{ manager.data.value.ordersOpen === 1 ? '' : 's' }}
+          </div>
         </NuxtLink>
 
+        <!-- KPI 3a · Margen bruto (owner) -->
         <NuxtLink
+          v-if="isOwner"
           role="listitem"
           class="kpi-card"
-          to="/app/recipes"
-          aria-label="Margen promedio: 62 por ciento"
+          to="/app/reports"
+          :aria-label="`Margen bruto: ${grossMarginPct ?? 0} por ciento`"
         >
           <div class="kpi-row-head">
-            <div class="kpi-eyebrow">Margen promedio</div>
+            <div class="kpi-eyebrow">Margen bruto</div>
             <UIcon name="i-lucide-percent" class="size-3.5 text-(--terracotta)" />
           </div>
-          <div class="kpi-value kpi-value-accent">62 %</div>
+          <div class="kpi-value kpi-value-accent">{{ (grossMarginPct ?? 0).toFixed(0) }} %</div>
           <div class="kpi-trend accent">
-            <UIcon name="i-lucide-arrow-up-right" /> Alto rendimiento
+            <UIcon name="i-lucide-bar-chart-3" /> Ingresos hoy
           </div>
-          <div class="kpi-meta">Top 25 % de tu rubro</div>
+          <div v-if="lowStockCount !== null && lowStockCount > 0" class="kpi-meta">
+            {{ lowStockCount }} insumo{{ lowStockCount === 1 ? '' : 's' }} con stock bajo
+          </div>
+        </NuxtLink>
+
+        <!-- KPI 3b · Stock bajo (manager) -->
+        <NuxtLink
+          v-else-if="isManager"
+          role="listitem"
+          class="kpi-card"
+          to="/app/stock"
+          :aria-label="`Stock bajo: ${lowStockCount ?? 0} insumos`"
+        >
+          <div class="kpi-row-head">
+            <div class="kpi-eyebrow">Stock bajo</div>
+            <UIcon name="i-lucide-package" class="size-3.5 text-(--terracotta)" />
+          </div>
+          <div class="kpi-value" :class="{ 'kpi-value-accent': (lowStockCount ?? 0) > 0 }">{{ lowStockCount ?? 0 }}</div>
+          <div class="kpi-trend" :class="(lowStockCount ?? 0) > 0 ? 'warm' : 'accent'">
+            <UIcon :name="(lowStockCount ?? 0) > 0 ? 'i-lucide-alert-triangle' : 'i-lucide-check'" />
+            {{ (lowStockCount ?? 0) > 0 ? 'Revisar insumos' : 'Todo en orden' }}
+          </div>
+          <div v-if="manager.data.value" class="kpi-meta">{{ manager.data.value.itemsInKitchen }} ítems en cocina</div>
+        </NuxtLink>
+
+        <!-- KPI 3c · Ticket promedio (staff) -->
+        <div
+          v-else
+          role="listitem"
+          class="kpi-card kpi-static"
+          :aria-label="`Ticket promedio: ${formatPEN(avgTicket ?? 0)}`"
+        >
+          <div class="kpi-row-head">
+            <div class="kpi-eyebrow">Ticket promedio</div>
+            <UIcon name="i-lucide-receipt" class="size-3.5 text-(--terracotta)" />
+          </div>
+          <div class="kpi-value kpi-value-accent">{{ formatPEN(avgTicket ?? 0) }}</div>
+          <div v-if="cashier.data.value" class="kpi-trend accent">
+            <UIcon name="i-lucide-x-circle" /> {{ cashier.data.value.voidCount }} anulación{{ cashier.data.value.voidCount === 1 ? '' : 'es' }}
+          </div>
+        </div>
+      </div>
+
+      <!-- Top platos de hoy (real: admin → contribución; manager → unidades) -->
+      <div v-if="topDishes.length" class="topdishes">
+        <div class="topdishes-head">
+          <span class="topdishes-title">Top platos de hoy</span>
+          <NuxtLink to="/app/reports" class="topdishes-link">Ver reportes</NuxtLink>
+        </div>
+        <NuxtLink
+          v-for="(d, i) in topDishes.slice(0, 3)"
+          :key="d.name"
+          to="/app/reports"
+          class="topdish"
+          :aria-label="`${i + 1}. ${d.name}: ${formatPEN(d.revenue)}, ${d.qty} unidades`"
+        >
+          <span class="topdish-pos" :class="{ first: i === 0 }">{{ i + 1 }}</span>
+          <span class="topdish-name">{{ d.name }}</span>
+          <span class="topdish-right">
+            <span class="topdish-rev">{{ formatPEN(d.revenue) }}</span>
+            <span class="topdish-sub">{{ d.qty }} und</span>
+          </span>
         </NuxtLink>
       </div>
     </section>
@@ -153,8 +336,11 @@ function notify(message: string): void {
       <div class="section-head">
         <div class="ico" aria-hidden="true"><UIcon name="i-lucide-bot" /></div>
         <div>
-          <div class="section-title">Alertas GastronomIA</div>
-          <div class="section-sub">Análisis IA en tiempo real · hace 4 min</div>
+          <div class="section-title">
+            Alertas GastronomIA
+            <span class="demo-tag" title="Contenido de demostración">Demo</span>
+          </div>
+          <div class="section-sub">Motor de alertas IA · próximamente (E08)</div>
         </div>
       </div>
 
@@ -250,11 +436,11 @@ function notify(message: string): void {
 
     <!-- ============ Tip IA ============ -->
     <section class="section" aria-label="Acción sugerida por IA">
-      <div class="section-eyebrow">Acción sugerida</div>
+      <div class="section-eyebrow">Acción sugerida <span class="demo-tag">Demo</span></div>
       <div class="tip">
         <div class="tip-ico" aria-hidden="true"><UIcon name="i-lucide-lightbulb" /></div>
         <div class="tip-body">
-          <span class="tip-eyebrow">Insight IA · merchandising</span>
+          <span class="tip-eyebrow">Insight IA · merchandising · próximamente</span>
           Coloca un cartel en mesas destacando <b>«Bebidas del día»</b>. Detecté que mesas
           similares piden <b>40 % más cocteles</b> cuando hay promo visible.
         </div>
@@ -418,6 +604,70 @@ function notify(message: string): void {
 .kpi-mini span { flex: 1; background: rgba(243,237,228,0.25); border-radius: 1.5px; }
 .kpi-mini span.on { background: var(--terracotta-300); }
 .kpi-ring { flex-shrink: 0; }
+
+/* ---- KPI: estados de carga / error ---- */
+.kpi-state {
+  margin: 0 20px;
+  display: flex; flex-direction: column; align-items: center; gap: 10px;
+  text-align: center;
+  background: var(--pure-white);
+  border: 1px solid var(--border-subtle);
+  border-radius: 14px;
+  padding: 24px 16px;
+  font-size: 13px; color: var(--fg2);
+}
+.kpi-state-ico { width: 26px; height: 26px; color: var(--fg3); }
+.kpi-state p { margin: 0; }
+.kpi-skeleton { gap: 12px; pointer-events: none; }
+.sk {
+  display: block; border-radius: 6px;
+  background: linear-gradient(90deg, var(--crema-200) 25%, var(--crema-100) 37%, var(--crema-200) 63%);
+  background-size: 400% 100%;
+  animation: sk-shimmer 1.4s ease infinite;
+}
+.sk-eyebrow { width: 60%; height: 11px; }
+.sk-value { width: 75%; height: 26px; margin-top: 6px; }
+.sk-trend { width: 50%; height: 12px; margin-top: auto; }
+@keyframes sk-shimmer { 0% { background-position: 100% 0; } 100% { background-position: 0 0; } }
+@media (prefers-reduced-motion: reduce) { .sk { animation: none; } }
+
+/* ---- Top platos de hoy (debajo del rail de KPIs) ---- */
+.topdishes {
+  margin: 14px 20px 0;
+  background: var(--pure-white);
+  border: 1px solid var(--border-subtle);
+  border-radius: 14px;
+  padding: 6px 14px;
+}
+.topdishes-head {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 10px 0 8px;
+}
+.topdishes-title { font-size: 13px; font-weight: 600; color: var(--fg2); }
+.topdishes-link { font-size: 12px; font-weight: 600; color: var(--terracotta-700); }
+.topdish {
+  display: grid; grid-template-columns: 18px 1fr auto; align-items: center; gap: 12px;
+  padding: 10px 0; text-decoration: none;
+  transition: opacity var(--dur) var(--ease-standard);
+}
+.topdish + .topdish { border-top: 1px solid var(--border-subtle); }
+.topdish:active { opacity: 0.6; }
+.topdish-pos { font-family: var(--font-serif); font-style: italic; font-weight: 500; font-size: 16px; color: var(--fg3); text-align: center; }
+.topdish-pos.first { color: var(--terracotta-700); }
+.topdish-name { font-size: 14px; font-weight: 600; color: var(--fg1); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.topdish-right { text-align: right; display: flex; flex-direction: column; gap: 1px; }
+.topdish-rev { font-size: 13.5px; font-weight: 700; color: var(--fg1); font-variant-numeric: tabular-nums; }
+.topdish-sub { font-size: 11px; color: var(--fg3); font-variant-numeric: tabular-nums; }
+
+/* ---- Etiqueta "Demo" (widgets aún sin backend: alertas/insight IA = E08) ---- */
+.demo-tag {
+  display: inline-block; vertical-align: middle;
+  margin-left: 6px;
+  font-size: 9.5px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase;
+  color: var(--mostaza-800); background: var(--mostaza-50);
+  border: 1px solid var(--mostaza-100);
+  padding: 1px 6px; border-radius: 999px;
+}
 
 /* ============ Alertas IA ============ */
 .alerts-wrap {
