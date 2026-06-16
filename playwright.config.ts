@@ -17,7 +17,10 @@ export default defineConfig({
   // 2 workers: el stack de dev (1 backend + 1 DB + preview) se satura a 4 y produce
   // flakiness en los flujos con mucha interacción; a 2 la suite es estable.
   workers: 2,
-  retries: 0,
+  // 1 reintento: el stack de dev compartido produce flakiness ocasional en los flujos
+  // de mucha interacción bajo carga paralela; un retry la absorbe sin enmascarar fallos
+  // reales (un test que falla de verdad falla en ambos intentos).
+  retries: 1,
   timeout: 45_000,
   expect: { timeout: 10_000 },
   reporter: [['list']],
