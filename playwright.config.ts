@@ -14,7 +14,9 @@ export default defineConfig({
   testDir: './tests/e2e',
   outputDir: './tests/e2e/.artifacts',
   fullyParallel: true,
-  workers: 4,
+  // 2 workers: el stack de dev (1 backend + 1 DB + preview) se satura a 4 y produce
+  // flakiness en los flujos con mucha interacción; a 2 la suite es estable.
+  workers: 2,
   retries: 0,
   timeout: 45_000,
   expect: { timeout: 10_000 },
