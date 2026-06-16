@@ -60,6 +60,15 @@ const initials = computed(() =>
       </div>
     </div>
 
+    <NuxtLink v-if="canManageCatalog" to="/app/migracion" class="mig-banner">
+      <span class="mig-banner-ico" aria-hidden="true"><UIcon name="i-lucide-rocket" /></span>
+      <span class="mig-banner-text">
+        <span class="mig-banner-title">Asistente de migración</span>
+        <span class="mig-banner-sub">Configura tu local e importa insumos y ventas en pasos guiados</span>
+      </span>
+      <UIcon name="i-lucide-chevron-right" class="mig-banner-chevron" aria-hidden="true" />
+    </NuxtLink>
+
     <div class="section-eyebrow">Secciones</div>
     <div class="settings-list">
       <NuxtLink
@@ -152,6 +161,28 @@ const initials = computed(() =>
   font-variant-numeric: tabular-nums;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
+
+.mig-banner {
+  display: flex; align-items: center; gap: 12px;
+  margin: 0 20px 20px;
+  padding: 14px 16px;
+  border-radius: 14px;
+  text-decoration: none;
+  background: linear-gradient(150deg, var(--terracotta-100), var(--crema-100));
+  border: 1px solid var(--terracotta-300);
+  transition: transform var(--dur) var(--ease-standard);
+}
+.mig-banner:hover { transform: translateY(-1px); }
+.mig-banner-ico {
+  width: 42px; height: 42px; border-radius: 12px; flex-shrink: 0;
+  background: var(--terracotta); color: var(--crema-100);
+  display: inline-flex; align-items: center; justify-content: center;
+}
+.mig-banner-ico .iconify { width: 20px; height: 20px; }
+.mig-banner-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.mig-banner-title { font-size: 14.5px; font-weight: 600; color: var(--fg1); }
+.mig-banner-sub { font-size: 12px; color: var(--fg2); line-height: 1.4; }
+.mig-banner-chevron { width: 16px; height: 16px; color: var(--terracotta-700); flex-shrink: 0; }
 
 .section-eyebrow {
   font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase;
