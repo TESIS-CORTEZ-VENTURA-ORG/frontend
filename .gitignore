@@ -28,3 +28,8 @@ gastronomia-v2/
 
 # Capturas generadas por npm run test:visual (regenerables)
 tests/visual/shots/
+
+# Playwright E2E outputs
+tests/e2e/.artifacts/
+playwright-report/
+test-results/
