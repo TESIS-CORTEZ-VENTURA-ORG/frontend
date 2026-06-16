@@ -342,3 +342,30 @@ export interface Ingestion {
   errors: IngestionError[]
   createdAt: string
 }
+
+// ===== Cierre Z / caja (HU-04-08) =====
+// Totales del turno por método de pago (siempre las 4 claves). Dinero como string
+// (autoritativo del backend); la UI solo lo formatea.
+export type CashByMethod = Record<'cash' | 'card' | 'yape' | 'plin', string>
+
+/** Preview del turno abierto (no persiste): agregado de ventas desde el último cierre. */
+export interface CashClosePreview {
+  periodStart: string | null
+  salesCount: number
+  voidCount: number
+  totalGross: string
+  byMethod: CashByMethod
+  openSince: string | null
+}
+
+/** Cierre Z persistido (inmutable). */
+export interface CashClose {
+  id: string
+  openedAt: string
+  closedAt: string
+  salesCount: number
+  voidCount: number
+  totalGross: string
+  byMethod: CashByMethod
+  userId: string | null
+}

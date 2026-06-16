@@ -30,6 +30,7 @@ const allGroups: MenuGroup[] = [
       { icon: 'i-lucide-package', label: 'Inventario', sub: 'Stock, movimientos y conteos', to: '/app/stock' },
       { icon: 'i-lucide-percent', label: 'Costeo y márgenes', sub: 'Costo, margen y precio por plato', to: '/app/costeo', ownerOnly: true },
       { icon: 'i-lucide-receipt', label: 'Comprobantes', sub: 'Ventas y tickets emitidos', to: '/app/invoices' },
+      { icon: 'i-lucide-lock', label: 'Cierre de caja (Z)', sub: 'Totales del turno y cierre Z', to: '/app/cierre', ownerOnly: true },
       { icon: 'i-lucide-bar-chart-3', label: 'Reportes', sub: 'Dashboards, ventas y análisis', to: '/app/reports' },
     ],
   },

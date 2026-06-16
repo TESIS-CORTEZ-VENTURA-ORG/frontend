@@ -9,7 +9,7 @@ import type { APIRequestContext } from '@playwright/test'
  * de cobro/anulación/split se ejercitan en la UI.
  *
  * Excluye servicios externos/IA y la EMISIÓN a SUNAT — solo el ticket local que
- * persiste el backend. No hay UI de Cierre Z en la app (ver test skip al final).
+ * persiste el backend. El Cierre Z (HU-04-08) tiene pantalla en /app/cierre (test al final).
  */
 
 interface SeededCatalog {
@@ -291,10 +291,27 @@ test.describe('E04 · Cobros y comprobantes (owner, UI)', () => {
     await expect(row.locator('.void-tag')).toHaveText(/anulada/i)
   })
 
-  // ===== Cierre Z — SKIP: no existe UI en la app =====
-  // No hay pantalla/acción de "Cierre Z" / arqueo de caja en el frontend (búsqueda
-  // exhaustiva en app/pages y componentes → 0 resultados). La pestaña "Caja" del POS
-  // solo muestra el resumen de venta del día (ya cubierto indirectamente por el flujo
-  // de cobro). Se omite hasta que exista la pantalla.
-  test.skip('cierre Z (no implementado en la UI)', async () => {})
+  // ===== HU-04-08 · Cierre Z (caja) =====
+  test('cierre Z: el turno muestra el total cobrado y al cerrarlo queda en el historial', async ({ owner, request }) => {
+    // Una venta pagada en efectivo abre el turno con S/120 en "Efectivo".
+    await seedIssuedSale(request, owner, 120)
+    await gotoHydrated(owner, '/app/cierre')
+
+    // Turno abierto: total bruto + desglose por método (efectivo).
+    const preview = owner.page.locator('.cz-preview')
+    await expect(preview).toContainText('120')
+    await expect(preview.locator('.cz-method').filter({ hasText: /efectivo/i })).toContainText('120.00')
+
+    // Cerrar el turno → confirmar.
+    await owner.page.getByRole('button', { name: /cerrar turno/i }).click()
+    const sheet = owner.page.getByRole('dialog', { name: /cerrar turno/i })
+    await expect(sheet).toBeVisible()
+    await expect(sheet.locator('.cz-confirm-row.total')).toContainText('120.00')
+    await sheet.getByRole('button', { name: /confirmar cierre z/i }).click()
+
+    // Éxito + el cierre queda en "Cierres anteriores"; el turno nuevo ya no tiene ventas.
+    await expect(owner.page.getByText('Turno cerrado (Cierre Z)', { exact: true })).toBeVisible()
+    await expect(owner.page.locator('.cz-item').filter({ hasText: '120.00' }).first()).toBeVisible()
+    await expect(owner.page.getByRole('button', { name: /cerrar turno/i })).toBeDisabled()
+  })
 })
