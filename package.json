@@ -9,7 +9,9 @@
     "preview": "nuxt preview",
     "postinstall": "nuxt prepare",
     "test:visual": "node scripts/visual-shots.mjs",
-    "test:ux": "node scripts/ux-audit.mjs"
+    "test:ux": "node scripts/ux-audit.mjs",
+    "test:e2e": "playwright test",
+    "e2e:install": "playwright install chromium chromium-headless-shell"
   },
   "dependencies": {
     "@nuxt/ui": "^4.8.2",
@@ -27,6 +29,7 @@
   },
   "devDependencies": {
     "@iconify-json/lucide": "^1.2.111",
+    "@playwright/test": "1.60.0",
     "@types/node": "^22.19.21",
     "playwright-core": "^1.60.0",
     "typescript": "^6.0.3",
