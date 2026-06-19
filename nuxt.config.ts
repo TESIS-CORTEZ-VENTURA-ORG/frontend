@@ -3,6 +3,9 @@ export default defineNuxtConfig({
   compatibilityDate: '2025-07-15',
   devtools: { enabled: true },
 
+  // El frontend corre SIEMPRE en :3000; el backend (Docker) se expone en :3001.
+  devServer: { port: 3000 },
+
   modules: [
     '@nuxt/ui',
     '@pinia/nuxt',
@@ -28,6 +31,13 @@ export default defineNuxtConfig({
       link: [
         { rel: 'icon', type: 'image/svg+xml', href: '/img/logo.svg' },
         { rel: 'apple-touch-icon', href: '/apple-touch-icon.png' },
+        // Tipografía de marca: Geist (sans + mono). Look editorial-dashboard.
+        { rel: 'preconnect', href: 'https://fonts.googleapis.com' },
+        { rel: 'preconnect', href: 'https://fonts.gstatic.com', crossorigin: '' },
+        {
+          rel: 'stylesheet',
+          href: 'https://fonts.googleapis.com/css2?family=Geist:wght@100..900&family=Geist+Mono:wght@400..700&display=swap',
+        },
       ],
     },
   },
