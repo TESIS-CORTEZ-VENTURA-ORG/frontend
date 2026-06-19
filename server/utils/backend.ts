@@ -69,6 +69,33 @@ export async function establishSession(
   return user
 }
 
+/**
+ * Renueva la sesión usando el `refreshToken` sellado: pide tokens nuevos al backend
+ * (rotación con detección de reuso del lado NestJS) y vuelve a sellar la sesión.
+ * Si el refresh es inválido/expirado, LIMPIA la sesión y devuelve 401. El nuevo
+ * refreshToken se guarda en `secure` (nunca llega al cliente). Devuelve el nuevo access.
+ */
+export async function refreshSession(event: H3Event, base: string): Promise<string> {
+  const session = await getUserSession(event)
+  const refreshToken = session.secure?.refreshToken
+  if (!refreshToken) {
+    throw createError({ statusCode: 401, statusMessage: 'No autenticado' })
+  }
+  let tokens: ApiEnvelope<BackendTokens>
+  try {
+    tokens = await $fetch<ApiEnvelope<BackendTokens>>(`${base}/api/auth/refresh`, {
+      method: 'POST',
+      body: { refreshToken },
+    })
+  } catch {
+    // Refresh rechazado (expirado/revocado/reuso) → sesión muerta: limpiar y 401.
+    await clearUserSession(event)
+    throw createError({ statusCode: 401, statusMessage: 'Sesión expirada' })
+  }
+  await establishSession(event, base, tokens.data)
+  return tokens.data.accessToken
+}
+
 type Method = 'GET' | 'POST' | 'PATCH' | 'PUT' | 'DELETE'
 
 /**
@@ -87,26 +114,41 @@ export async function backendFetch<T>(
   if (!token) {
     throw createError({ statusCode: 401, statusMessage: 'No autenticado' })
   }
-  try {
-    const data = await $fetch(`${base}${path}`, {
+  const call = (bearer: string) =>
+    $fetch(`${base}${path}`, {
       method: opts.method,
       body: opts.body,
       query: opts.query,
-      headers: { Authorization: `Bearer ${token}` },
+      headers: { Authorization: `Bearer ${bearer}` },
     })
+  try {
     // $fetch infiere TypedInternalResponse; la URL es externa (backend) → casteamos a T.
-    return data as unknown as T
+    return (await call(token)) as unknown as T
   } catch (error) {
-    const err = error as {
-      statusCode?: number
-      data?: { error?: { message?: string }, message?: string }
+    // Access token vencido (15 min) → renovar con el refresh y reintentar UNA vez.
+    // Transparente para el cliente; mantiene la sesión viva sin reloguear.
+    if ((error as { statusCode?: number }).statusCode === 401) {
+      const fresh = await refreshSession(event, base) // lanza 401 si el refresh murió
+      try {
+        return (await call(fresh)) as unknown as T
+      } catch (retryError) {
+        throw mapBackendError(retryError)
+      }
     }
-    const status = err.statusCode ?? 502
-    // Propaga el mensaje del backend (envelope `error.message`) para poder
-    // mostrarlo como toast en pantalla (p. ej. el 409 de borrar-con-hijos).
-    const message = err.data?.error?.message ?? err.data?.message ?? 'Error del backend'
-    throw createError({ statusCode: status, statusMessage: message, data: { message } })
+    throw mapBackendError(error)
   }
+}
+
+/** Normaliza un error del backend a un H3Error con status y mensaje propagables. */
+function mapBackendError(error: unknown) {
+  const err = error as {
+    statusCode?: number
+    data?: { error?: { message?: string }; message?: string }
+  }
+  const status = err.statusCode ?? 502
+  // Propaga el mensaje del backend (envelope `error.message`) para mostrarlo como toast.
+  const message = err.data?.error?.message ?? err.data?.message ?? 'Error del backend'
+  return createError({ statusCode: status, statusMessage: message, data: { message } })
 }
 
 /**
