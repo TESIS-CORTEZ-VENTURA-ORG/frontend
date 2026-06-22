@@ -78,7 +78,7 @@ const initials = computed(() =>
 <template>
   <div class="menu-page">
     <div class="user-card">
-      <span class="avatar" aria-hidden="true">{{ initials }}</span>
+      <span class="avatar" aria-hidden="true">{{ initials }}<img class="avatar-img" src="/img/avatar-default.jpg" alt=""></span>
       <div class="user-meta">
         <span class="user-name">{{ user?.name }}</span>
         <span class="user-sub">{{ user?.email }} · <span class="capitalize">{{ user?.role }}</span></span>
@@ -138,11 +138,16 @@ const initials = computed(() =>
   margin-bottom: 20px;
 }
 .avatar {
+  position: relative; overflow: hidden;
   width: 44px; height: 44px; border-radius: 50%;
   background: var(--terracotta); color: var(--crema-100);
   font-size: 15px; font-weight: 700;
   display: inline-flex; align-items: center; justify-content: center;
   flex-shrink: 0;
+}
+.avatar-img {
+  position: absolute; inset: 0;
+  width: 100%; height: 100%; object-fit: cover; object-position: center 18%;
 }
 .user-meta { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
 .user-name { font-size: 15px; font-weight: 600; color: var(--fg1); }

@@ -90,7 +90,7 @@ async function submitPassword(): Promise<void> {
 
     <!-- Tarjeta de usuario -->
     <section class="pf-card pf-user">
-      <span class="pf-avatar" aria-hidden="true">{{ initials }}</span>
+      <span class="pf-avatar" aria-hidden="true">{{ initials }}<img class="pf-avatar-img" src="/img/avatar-default.jpg" alt=""></span>
       <div class="pf-user-meta">
         <span class="pf-name">{{ user?.name }}</span>
         <span class="pf-email">{{ user?.email }}</span>
@@ -246,11 +246,16 @@ async function submitPassword(): Promise<void> {
   padding: 16px;
 }
 .pf-avatar {
+  position: relative; overflow: hidden;
   width: 56px; height: 56px; border-radius: 50%;
   background: var(--terracotta); color: var(--crema-100);
   font-size: 19px; font-weight: 700;
   display: inline-flex; align-items: center; justify-content: center;
   flex-shrink: 0;
+}
+.pf-avatar-img {
+  position: absolute; inset: 0;
+  width: 100%; height: 100%; object-fit: cover; object-position: center 18%;
 }
 .pf-user-meta { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
 .pf-name { font-size: 17px; font-weight: 600; color: var(--fg1); }
