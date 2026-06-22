@@ -10,6 +10,13 @@ const { messages, streaming, ask, stop } = useChatStream()
 
 const firstName = computed(() => user.value?.name?.split(' ')[0] ?? '')
 
+// El topbar muestra el título estable del shell; el saludo editorial vive en el
+// empty-state del cuerpo (evita duplicar el mismo texto en ambos lugares).
+definePageHeader(() => ({
+  title: 'Chat IA',
+  subtitle: 'Lenguaje natural → SQL',
+}))
+
 // ===== Catálogo de consultas por categoría (estado inicial) =====
 interface QueryCategory {
   label: string

@@ -198,6 +198,70 @@
   --ui-radius: 0.5rem;
 }
 
+/* ===== DARK THEME =====
+   Solo se redefinen los tokens CRUDOS (crema→oscuro, espresso→claro). Como los
+   tokens semánticos (--bg, --fg1, …) se definen vía var(--crema)/var(--espresso),
+   adaptan SOLOS. Paleta dark cálida (no gris frío), coherente con la marca. */
+:root.dark {
+  /* Superficies cálidas oscuras */
+  --crema: #14110E;
+  --crema-50: #1A1510;
+  --crema-100: #201A15;
+  --crema-200: #2B231C;
+  --pure-white: #1E1813;
+
+  /* Texto: espresso (oscuro) → claro */
+  --espresso: #F4EEE6;
+  --espresso-800: #E8E1D7;
+  --espresso-600: #B7AEA2;
+  --espresso-400: #8A8276;
+
+  /* Acentos con leve brillo para contraste sobre oscuro */
+  --terracotta: #DB7E55;
+  --terracotta-700: #E89B71;
+  --terracotta-300: #99502F;
+  --terracotta-100: #38241B;
+
+  --mostaza: #E3B65E;
+  --mostaza-700: #ECC681;
+  --mostaza-100: #38301A;
+
+  --oliva: #95A485;
+  --oliva-700: #B0BCA2;
+  --oliva-100: #232A1D;
+
+  --danger: #E5795F;
+  --danger-bg: #3B211B;
+  --success: var(--oliva);
+  --success-bg: var(--oliva-100);
+  --warning: var(--mostaza);
+  --warning-bg: var(--mostaza-100);
+
+  /* Bordes y sombras para superficie oscura */
+  --border-subtle: rgba(255, 255, 255, 0.07);
+  --border: rgba(255, 255, 255, 0.13);
+  --border-strong: rgba(255, 255, 255, 0.26);
+  --shadow-xs: 0 1px 0 rgba(0, 0, 0, 0.4);
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.5);
+  --shadow: 0 4px 14px rgba(0, 0, 0, 0.5);
+  --shadow-lg: 0 14px 36px rgba(0, 0, 0, 0.6);
+  --focus-ring: 0 0 0 3px rgba(219, 126, 85, 0.4);
+
+  /* UI tokens de Nuxt (especificidad :root.dark gana sobre los defaults) */
+  --ui-bg: var(--crema);
+  --ui-bg-muted: var(--crema-200);
+  --ui-bg-elevated: var(--crema-100);
+  --ui-bg-accented: var(--crema-200);
+  --ui-text-dimmed: var(--espresso-400);
+  --ui-text-muted: var(--espresso-600);
+  --ui-text-toned: var(--espresso-600);
+  --ui-text: var(--espresso-800);
+  --ui-text-highlighted: var(--espresso);
+  --ui-border: var(--border);
+  --ui-border-muted: var(--border-subtle);
+  --ui-border-accented: var(--border-strong);
+}
+
 html, body {
   background: var(--ui-bg);
   color: var(--ui-text-highlighted);

@@ -1,10 +1,17 @@
 // https://nuxt.com/docs/api/configuration/nuxt-config
 export default defineNuxtConfig({
   compatibilityDate: '2025-07-15',
-  devtools: { enabled: true },
+  // DevTools desactivado: su overlay de errores usa youch + source-maps en WASM
+  // que crashea el dev server en Windows (exit 255). Reactivar si se trabaja en Linux/Mac.
+  devtools: { enabled: false },
 
   // El frontend corre SIEMPRE en :3000; el backend (Docker) se expone en :3001.
   devServer: { port: 3000 },
+
+  // Source-maps del server OFF: el handler de errores de Nitro (youch) parsea
+  // source-maps con un WASM que tira `unreachable` y tumba el dev server en
+  // Windows al enriquecer el stack de un error SSR (p. ej. el 401 de sesión).
+  sourcemap: { server: false },
 
   modules: [
     '@nuxt/ui',
@@ -16,8 +23,9 @@ export default defineNuxtConfig({
 
   css: ['~/assets/css/main.css', '~/assets/css/admin-catalog.css'],
 
-  // TP1 es light-only; el color mode de Nuxt UI queda desactivado
-  ui: { colorMode: false },
+  // Color mode (light/dark). Nuxt UI maneja la clase `.dark` en <html> sin flash.
+  ui: { colorMode: true },
+  colorMode: { classSuffix: '', preference: 'light', fallback: 'light' },
 
   app: {
     head: {
