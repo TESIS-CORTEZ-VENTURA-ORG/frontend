@@ -119,7 +119,7 @@ const accountItems = computed<DropdownMenuItem[][]>(() => [
         :ui="{ content: 'w-[228px]' }"
       >
         <button type="button" class="account" :class="{ 'is-collapsed': collapsed }" aria-label="Menú de cuenta">
-          <span class="avatar" aria-hidden="true">{{ initials }}</span>
+          <span class="avatar" aria-hidden="true">{{ initials }}<img class="avatar-img" src="/img/avatar-default.jpg" alt=""></span>
           <span v-if="!collapsed" class="account-meta">
             <span class="account-name">{{ user?.name ?? user?.email }}</span>
             <span class="account-role">{{ roleLabel }}</span>
@@ -295,11 +295,16 @@ const accountItems = computed<DropdownMenuItem[][]>(() => [
 .account:hover { background: var(--crema-100); border-color: var(--border-subtle); }
 .account:focus-visible { outline: 2px solid var(--terracotta); outline-offset: 1px; }
 .avatar {
+  position: relative; overflow: hidden;
   width: 38px; height: 38px; border-radius: 50%;
   background: var(--terracotta); color: var(--crema-100);
   font-size: 13px; font-weight: 700;
   display: inline-flex; align-items: center; justify-content: center;
   flex-shrink: 0;
+}
+.avatar-img {
+  position: absolute; inset: 0;
+  width: 100%; height: 100%; object-fit: cover; object-position: center 18%;
 }
 .account-meta { flex: 1; min-width: 0; display: flex; flex-direction: column; }
 .account-name {

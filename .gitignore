@@ -26,8 +26,9 @@ logs
 # Prototipo de referencia (implementado al 100% — vive solo en local)
 gastronomia-v2/
 
-# Capturas generadas por npm run test:visual (regenerables)
+# Capturas generadas por los scripts de auditoría visual (regenerables)
 tests/visual/shots/
+tests/visual/audit/
 
 # Playwright E2E outputs
 tests/e2e/.artifacts/
