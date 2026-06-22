@@ -296,10 +296,17 @@ const shortcuts = [
   gap: clamp(12px, 1.5vw, 18px);
 }
 .kpi {
-  background: var(--bg-card);
+  /* gradiente sutil + glow cálido en la esquina → profundidad/vida */
+  background:
+    radial-gradient(118% 82% at 100% 0%, rgba(201, 106, 67, 0.09), transparent 52%),
+    linear-gradient(180deg, #FFFFFF 0%, var(--crema-50) 100%);
   border: 1px solid var(--border-subtle);
-  border-radius: 16px;
-  box-shadow: 0 1px 2px rgba(26, 26, 26, 0.05), 0 10px 26px -12px rgba(26, 26, 26, 0.16);
+  border-radius: 18px;
+  /* sombra en capas con glow CÁLIDO de color (el "lifted" vivo) */
+  box-shadow:
+    0 1px 2px rgba(26, 26, 26, 0.04),
+    0 14px 28px -16px rgba(201, 106, 67, 0.34),
+    0 22px 46px -24px rgba(26, 26, 26, 0.22);
   padding: clamp(18px, 2vw, 26px);
   display: flex; flex-direction: column; gap: 10px;
   text-decoration: none;
@@ -308,7 +315,15 @@ const shortcuts = [
     box-shadow var(--dur) var(--ease-standard),
     transform var(--dur) var(--ease-standard);
 }
-.kpi-link:hover { border-color: var(--border); box-shadow: var(--shadow); transform: translateY(-2px); }
+/* clickeables: lift + glow intensificado (feel táctil, como el botón) */
+.kpi-link:hover {
+  border-color: var(--border);
+  transform: translateY(-3px);
+  box-shadow:
+    0 1px 2px rgba(26, 26, 26, 0.05),
+    0 20px 34px -16px rgba(201, 106, 67, 0.48),
+    0 30px 58px -26px rgba(26, 26, 26, 0.28);
+}
 
 /* Mini-barras de medida (ocupación, margen) — data real */
 .meter { height: 5px; border-radius: 999px; background: var(--crema-200); overflow: hidden; margin-top: 2px; }
@@ -397,6 +412,8 @@ const shortcuts = [
   width: 34px; height: 34px; border-radius: 10px;
   background: var(--crema-100); border: 1px solid var(--border-subtle);
   color: var(--terracotta-700); flex-shrink: 0;
+  /* chip con relieve sutil */
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.5), 0 3px 7px -2px rgba(26, 26, 26, 0.16);
 }
 .kpi-ico .iconify { width: 17px; height: 17px; }
 /* Chips con color semántico variado (como la referencia) */
