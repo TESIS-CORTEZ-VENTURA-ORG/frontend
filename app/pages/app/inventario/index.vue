@@ -6,7 +6,7 @@ useSeoMeta({ title: 'Stock — GastronomIA' })
 
 definePageHeader(() => ({
   title: 'Stock',
-  subtitle: 'Tu inventario en tiempo real',
+  subtitle: 'Controlá qué tenés, registrá movimientos y reponé lo que falta',
 }))
 
 const { data: ingredients } = useIngredients()
@@ -34,12 +34,15 @@ function statusOf(i: Ingredient): StockStatus {
 
 const STATUS_LABEL: Record<StockStatus, string> = { ok: 'OK', low: 'Bajo', crit: 'Crítico' }
 
+// Emoji por insumo — iconografía de CONTENIDO (comida), reconocible y cálida.
 const EMOJI_BY_NAME: Record<string, string> = {
   'Limón Sutil': '🍋',
   'Aceite de Oliva': '🫒',
+  'Aceite vegetal': '🫗',
   'Cilantro': '🌿',
   'Pescado Lenguado': '🐟',
   'Mariscos Mixtos': '🦐',
+  'Camarones': '🦐',
   'Lomo de Res': '🥩',
   'Pollo Entero': '🍗',
   'Cebolla Roja': '🧅',
@@ -49,6 +52,9 @@ const EMOJI_BY_NAME: Record<string, string> = {
   'Choclo Desgranado': '🌽',
   'Ají Limo': '🌶️',
   'Ají Amarillo': '🌶️',
+  'Ají amarillo': '🌶️',
+  'Ají limo': '🌶️',
+  'Arroz': '🍚',
   'Arroz Extra': '🌾',
   'Pisco Quebranta': '🍾',
   'Ron Blanco': '🥃',
@@ -58,9 +64,12 @@ const EMOJI_BY_NAME: Record<string, string> = {
 }
 const EMOJI_BY_CAT: Record<string, string> = {
   'Pescados y mariscos': '🐟',
+  'Pescados y Mariscos': '🐟',
   'Verduras y frutas': '🥬',
+  'Verduras': '🥬',
   'Carnes': '🥩',
   'Abarrotes': '🌾',
+  'Bebidas': '🥤',
   'Licores': '🍾',
   'Lácteos': '🥛',
   'Hierbas': '🌿',
@@ -149,100 +158,113 @@ async function onImportFile(e: Event): Promise<void> {
 
 <template>
   <div class="stk-screen">
-    <ClientOnly>
-      <Teleport to="#topbar-actions">
+    <!-- Toolbar full-bleed: búsqueda + scan + acciones (estructura POS) -->
+    <div class="scr-toolbar">
+      <label class="stk-search scr-toolbar-search">
+        <UIcon name="i-lucide-search" />
+        <input v-model="query" type="search" placeholder="Buscar insumo…" aria-label="Buscar insumo">
+      </label>
+      <div class="scr-toolbar-right">
+        <button class="stk-scan-btn" aria-label="Escanear código de barras — próximamente" @click="toast.add({ title: 'Scanner próximamente disponible', icon: 'i-lucide-scan-line' })">
+          <UIcon name="i-lucide-scan-line" />
+          <span class="soon" aria-hidden="true">PRONTO</span>
+        </button>
         <button type="button" class="stk-icon-btn" aria-label="Importar insumos (CSV)" @click="showImport = true">
           <UIcon name="i-lucide-upload" />
         </button>
         <NuxtLink to="/app/inventario/movimientos" class="stk-icon-btn" aria-label="Historial de movimientos">
           <UIcon name="i-lucide-history" />
         </NuxtLink>
-      </Teleport>
-    </ClientOnly>
-
-    <!-- Search + scan -->
-    <div class="stk-search-wrap">
-      <label class="stk-search">
-        <UIcon name="i-lucide-search" />
-        <input v-model="query" type="search" placeholder="Buscar insumo…" aria-label="Buscar insumo">
-      </label>
-      <button class="stk-scan-btn" aria-label="Escanear código de barras — próximamente" @click="toast.add({ title: 'Scanner próximamente disponible', icon: 'i-lucide-scan-line' })">
-        <UIcon name="i-lucide-scan-line" />
-        <span class="soon" aria-hidden="true">PRONTO</span>
-      </button>
-    </div>
-
-    <!-- AI status -->
-    <div class="stk-ai" role="status" aria-label="Estado de tu cocina">
-      <div class="stk-ai-ico" aria-hidden="true">
-        <UIcon name="i-lucide-bot" />
-        <span class="spark"><UIcon name="i-lucide-sparkles" /></span>
-      </div>
-      <div class="stk-ai-body">
-        <div class="stk-ai-title">
-          Estado de tu cocina
-          <span class="tag">EN VIVO</span>
-        </div>
-        <p class="stk-ai-text">
-          {{ critical.length > 0 ? 'Atención requerida.' : 'Todo bajo control.' }}
-          <b>{{ critical.length }} insumo{{ critical.length === 1 ? '' : 's' }} crítico{{ critical.length === 1 ? '' : 's' }}</b> para hoy.
-        </p>
       </div>
     </div>
 
-    <!-- Action grid -->
-    <section class="stk-action-grid" aria-label="Acciones principales">
-      <NuxtLink to="/app/inventario/lista-compras" class="stk-action">
-        <span class="stk-action-arrow" aria-hidden="true"><UIcon name="i-lucide-arrow-up-right" /></span>
-        <span class="stk-action-ico pos" aria-hidden="true"><UIcon name="i-lucide-shopping-cart" /></span>
-        <span class="stk-action-label">Planificar Compra</span>
-        <span class="stk-action-sub strong">{{ formatPEN(shoppingTotal) }} hoy</span>
-      </NuxtLink>
+    <div class="scr-body">
+      <div class="scr-main">
 
-      <NuxtLink to="/app/datos/factura-ia" class="stk-action featured">
-        <span class="stk-action-arrow" aria-hidden="true"><UIcon name="i-lucide-arrow-up-right" /></span>
-        <span class="stk-action-ico brand" aria-hidden="true">
-          <UIcon name="i-lucide-scan-line" />
-          <span class="spark"><UIcon name="i-lucide-sparkles" /></span>
+    <!-- Estado del inventario: callout editorial accionable (sin bot/sparkles/EN VIVO) -->
+    <component
+      :is="critical.length > 0 ? 'NuxtLink' : 'div'"
+      :to="critical.length > 0 ? '/app/inventario/lista-compras' : undefined"
+      class="stk-status"
+      :class="critical.length > 0 ? 'alert' : 'calm'"
+      role="status"
+      aria-label="Estado del inventario"
+    >
+      <span class="stk-status-mark" aria-hidden="true">
+        <UIcon :name="critical.length > 0 ? 'i-lucide-triangle-alert' : 'i-lucide-check'" />
+      </span>
+      <span v-if="critical.length > 0" class="stk-status-num">{{ critical.length }}</span>
+      <span class="stk-status-body">
+        <span class="stk-status-title">
+          {{ critical.length > 0 ? 'Insumos que necesitan atención' : 'Inventario al día' }}
         </span>
-        <span class="stk-action-label">Escanear Factura</span>
-        <span class="stk-action-sub brand-strong">+5 esta semana</span>
-      </NuxtLink>
+        <span class="stk-status-text">
+          {{ critical.length > 0
+            ? `Tenés ${critical.length} insumo${critical.length === 1 ? '' : 's'} bajo el mínimo para el servicio de hoy.`
+            : 'Todos tus insumos están por encima del stock mínimo.' }}
+        </span>
+      </span>
+      <span v-if="critical.length > 0" class="stk-status-go" aria-hidden="true">
+        Resolver <UIcon name="i-lucide-arrow-right" />
+      </span>
+    </component>
 
-      <NuxtLink to="/app/inventario/movimientos" class="stk-action">
-        <span class="stk-action-arrow" aria-hidden="true"><UIcon name="i-lucide-arrow-up-right" /></span>
-        <span class="stk-action-ico info" aria-hidden="true"><UIcon name="i-lucide-arrow-left-right" /></span>
-        <span class="stk-action-label">Movimientos</span>
-        <span class="stk-action-sub">Últimos 7 días</span>
-      </NuxtLink>
+    <!-- ZONA 1 — Registrar movimientos de stock -->
+    <section class="stk-zone" aria-labelledby="zone-mov">
+      <h2 id="zone-mov" class="stk-zone-label">Registrar movimientos</h2>
+      <div class="stk-zone-grid">
+        <NuxtLink to="/app/datos/factura-ia" class="stk-action stk-action--primary">
+          <span class="stk-action-ico" aria-hidden="true"><UIcon name="i-lucide-scan-line" /></span>
+          <span class="stk-action-body">
+            <span class="stk-action-label">Escanear Factura</span>
+            <span class="stk-action-sub">Cargá entradas desde una foto, sin tipear</span>
+          </span>
+          <span class="stk-action-badge">Lo más rápido</span>
+        </NuxtLink>
 
-      <NuxtLink to="/app/inventario/movimiento" class="stk-action">
-        <span class="stk-action-arrow" aria-hidden="true"><UIcon name="i-lucide-arrow-up-right" /></span>
-        <span class="stk-action-ico neutral" aria-hidden="true"><UIcon name="i-lucide-plus-circle" /></span>
-        <span class="stk-action-label">Ingreso Manual</span>
-        <span class="stk-action-sub">Movimiento rápido</span>
-      </NuxtLink>
+        <NuxtLink to="/app/inventario/movimiento" class="stk-action">
+          <span class="stk-action-ico" aria-hidden="true"><UIcon name="i-lucide-plus-circle" /></span>
+          <span class="stk-action-label">Ingreso Manual</span>
+          <span class="stk-action-sub">Sumá o descontá stock a mano</span>
+        </NuxtLink>
 
-      <NuxtLink to="/app/inventario/ordenes-compra" class="stk-action">
-        <span class="stk-action-arrow" aria-hidden="true"><UIcon name="i-lucide-arrow-up-right" /></span>
-        <span class="stk-action-ico info" aria-hidden="true"><UIcon name="i-lucide-clipboard-list" /></span>
-        <span class="stk-action-label">Órdenes de Compra</span>
-        <span class="stk-action-sub">Pedidos a proveedor</span>
-      </NuxtLink>
+        <NuxtLink to="/app/inventario/movimientos" class="stk-action">
+          <span class="stk-action-ico" aria-hidden="true"><UIcon name="i-lucide-history" /></span>
+          <span class="stk-action-label">Ver Movimientos</span>
+          <span class="stk-action-sub">Historial de entradas y salidas</span>
+        </NuxtLink>
+      </div>
+    </section>
 
-      <NuxtLink to="/app/inventario/mermas" class="stk-action">
-        <span class="stk-action-arrow" aria-hidden="true"><UIcon name="i-lucide-arrow-up-right" /></span>
-        <span class="stk-action-ico" style="background: var(--danger-bg); color: var(--danger);" aria-hidden="true"><UIcon name="i-lucide-trash-2" /></span>
-        <span class="stk-action-label">Mermas</span>
-        <span class="stk-action-sub">Pérdidas registradas</span>
-      </NuxtLink>
+    <!-- ZONA 2 — Reponer y controlar -->
+    <section class="stk-zone" aria-labelledby="zone-rep">
+      <h2 id="zone-rep" class="stk-zone-label">Reponer y controlar</h2>
+      <div class="stk-zone-grid stk-zone-grid--3">
+        <NuxtLink to="/app/inventario/lista-compras" class="stk-action">
+          <span class="stk-action-ico" aria-hidden="true"><UIcon name="i-lucide-shopping-cart" /></span>
+          <span class="stk-action-label">Planificar Compra</span>
+          <span class="stk-action-sub strong">{{ formatPEN(shoppingTotal) }} sugerido</span>
+        </NuxtLink>
+
+        <NuxtLink to="/app/inventario/ordenes-compra" class="stk-action">
+          <span class="stk-action-ico" aria-hidden="true"><UIcon name="i-lucide-clipboard-list" /></span>
+          <span class="stk-action-label">Órdenes de Compra</span>
+          <span class="stk-action-sub">Pedidos enviados a proveedores</span>
+        </NuxtLink>
+
+        <NuxtLink to="/app/inventario/mermas" class="stk-action danger">
+          <span class="stk-action-ico" aria-hidden="true"><UIcon name="i-lucide-trash-2" /></span>
+          <span class="stk-action-label">Registrar Merma</span>
+          <span class="stk-action-sub">Descontá lo que se perdió o venció</span>
+        </NuxtLink>
+      </div>
     </section>
 
     <!-- Críticos -->
     <section v-if="critical.length" class="stk-section" aria-label="Insumos críticos">
       <div class="stk-section-head">
         <div class="stk-section-title danger">
-          <span aria-hidden="true">🔥</span>
+          <UIcon name="i-lucide-flame" aria-hidden="true" />
           Insumos Críticos
           <span class="count">{{ critical.length }}</span>
         </div>
@@ -288,6 +310,7 @@ async function onImportFile(e: Event): Promise<void> {
     <!-- Mi inventario -->
     <section class="stk-section" aria-label="Mi inventario por categoría">
       <h2 class="stk-inv-title">Mi inventario</h2>
+      <p class="stk-inv-hint">Tocá un insumo para ver su detalle, costo y consumo.</p>
       <div class="stk-chip-rail" role="tablist" aria-label="Filtros por categoría">
         <button
           v-for="c in categories"
@@ -343,6 +366,40 @@ async function onImportFile(e: Event): Promise<void> {
         />
       </div>
     </section>
+      </div>
+
+      <aside class="scr-aside">
+        <section class="scr-panel">
+          <header class="scr-panel-head">
+            <span class="scr-eyebrow">Inventario</span>
+            <h3 class="scr-panel-title">{{ all.length }}<span class="scr-of"> insumos activos</span></h3>
+          </header>
+          <ul class="stk-todo">
+            <li v-if="critical.length" class="stk-todo-item danger">
+              <UIcon name="i-lucide-triangle-alert" aria-hidden="true" />
+              <NuxtLink to="/app/inventario/lista-compras">
+                Reponé {{ critical.length }} insumo{{ critical.length === 1 ? '' : 's' }} crítico{{ critical.length === 1 ? '' : 's' }}
+              </NuxtLink>
+            </li>
+            <li v-if="noCostCount" class="stk-todo-item warn">
+              <UIcon name="i-lucide-circle-help" aria-hidden="true" />
+              <button type="button" @click="cat = 'sin-costo'">
+                Completá el costo de {{ noCostCount }} insumo{{ noCostCount === 1 ? '' : 's' }}
+              </button>
+            </li>
+            <li class="stk-todo-item info">
+              <UIcon name="i-lucide-shopping-cart" aria-hidden="true" />
+              <NuxtLink to="/app/inventario/lista-compras">
+                Compra sugerida: <b>{{ formatPEN(shoppingTotal) }}</b>
+              </NuxtLink>
+            </li>
+            <li v-if="!critical.length && !noCostCount" class="stk-todo-item ok">
+              <UIcon name="i-lucide-check" aria-hidden="true" /> Todo al día, sin pendientes.
+            </li>
+          </ul>
+        </section>
+      </aside>
+    </div>
 
     <!-- Carga masiva CSV (HU-02-02) -->
     <UiBottomSheet v-model="showImport" title="Importar insumos (CSV)">
@@ -402,14 +459,7 @@ async function onImportFile(e: Event): Promise<void> {
 .stk-import-errors { margin-top: 4px; display: flex; flex-direction: column; gap: 4px; max-height: 180px; overflow: auto; }
 .stk-import-errors li { font-size: 12px; color: var(--fg2); }
 .stk-import-errors b { color: var(--danger); }
-.stk-screen {
-  max-width: 720px;
-  margin: 0 auto;
-  padding: calc(12px + env(safe-area-inset-top, 0px)) 20px 24px;
-}
-@media (min-width: 1024px) {
-  .stk-screen { padding-top: 28px; }
-}
+.stk-screen { padding: 0; }
 
 .stk-icon-btn {
   width: 40px; height: 40px; border-radius: 12px;
@@ -454,94 +504,153 @@ async function onImportFile(e: Event): Promise<void> {
   padding: 2px 5px; border-radius: 999px;
 }
 
-.stk-ai {
+/* ── Estado del inventario: callout editorial cálido (reemplaza .stk-ai oscuro) ── */
+.stk-status {
   position: relative;
-  display: flex; gap: 12px; align-items: flex-start;
-  background: linear-gradient(140deg, var(--espresso-800) 0%, var(--espresso) 100%);
-  border-radius: 14px;
-  padding: 14px;
-  margin-bottom: 14px;
+  display: flex; align-items: center; gap: 14px;
+  border-radius: 16px;
+  padding: 16px 18px;
+  margin-bottom: 16px;
   overflow: hidden;
+  text-decoration: none;
+  transition: transform 80ms var(--ease-standard), box-shadow var(--dur) var(--ease-standard);
 }
-.stk-ai::after {
+.stk-status.alert {
+  background: linear-gradient(150deg, var(--crema-50) 0%, var(--terracotta-100) 140%);
+  border: 1px solid var(--terracotta-100);
+  box-shadow: 0 6px 20px -12px rgba(201, 106, 67, 0.5);
+}
+.stk-status.calm {
+  background: linear-gradient(150deg, var(--crema-50) 0%, var(--oliva-100) 160%);
+  border: 1px solid var(--oliva-100);
+}
+/* Técnica uiverse (anillo translúcido en esquina) reskineada a terracota. */
+.stk-status::after {
   content: '';
-  position: absolute; top: -40px; right: -20px;
-  width: 140px; height: 140px;
-  background: radial-gradient(circle, rgba(201, 106, 67, 0.35), transparent 70%);
+  position: absolute; top: -56px; right: -28px;
+  width: 132px; height: 132px; border-radius: 50%;
+  border: 22px solid rgba(201, 106, 67, 0.10);
   pointer-events: none;
+  transition: transform var(--dur) var(--ease-standard);
 }
-.stk-ai-ico {
-  position: relative;
-  width: 36px; height: 36px; border-radius: 10px;
-  background: rgba(243, 237, 228, 0.12); color: var(--crema-100);
-  display: inline-flex; align-items: center; justify-content: center;
-  flex-shrink: 0;
-}
-.stk-ai-ico .iconify { width: 18px; height: 18px; }
-.stk-ai-ico .spark {
-  position: absolute; top: -5px; right: -5px;
-  color: var(--mostaza);
-}
-.stk-ai-ico .spark .iconify { width: 12px; height: 12px; }
-.stk-ai-title {
-  display: flex; align-items: center; gap: 8px;
-  font-size: 13.5px; font-weight: 600; color: var(--crema-100);
-}
-.stk-ai-title .tag {
-  font-size: 8.5px; font-weight: 700; letter-spacing: 0.08em;
-  background: rgba(110, 123, 97, 0.35); color: #C9D4BD;
-  padding: 2px 6px; border-radius: 999px;
-}
-.stk-ai-text { font-size: 12.5px; color: rgba(243, 237, 228, 0.7); margin: 3px 0 0; }
-.stk-ai-text b { color: var(--crema-100); }
+.stk-status.calm::after { border-color: rgba(110, 123, 97, 0.10); }
+.stk-status.alert:hover { transform: translateY(-1px); }
+.stk-status.alert:hover::after { transform: scale(1.12); }
 
-.stk-action-grid {
-  display: grid; grid-template-columns: 1fr 1fr;
-  gap: 10px;
-  margin-bottom: 20px;
+.stk-status-mark {
+  flex-shrink: 0;
+  width: 38px; height: 38px; border-radius: 11px;
+  display: inline-flex; align-items: center; justify-content: center;
+}
+.stk-status.alert .stk-status-mark { background: var(--terracotta-100); color: var(--terracotta-700); }
+.stk-status.calm  .stk-status-mark { background: var(--oliva-100); color: var(--oliva-700); }
+.stk-status-mark .iconify { width: 19px; height: 19px; }
+
+.stk-status-num {
+  flex-shrink: 0;
+  font-family: var(--font-serif);
+  font-size: 34px; font-weight: 600; line-height: 1;
+  color: var(--terracotta-700);
+  font-variant-numeric: tabular-nums;
+}
+.stk-status-body { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
+.stk-status-title { font-size: 14px; font-weight: 700; color: var(--fg1); }
+.stk-status-text  { font-size: 12.5px; color: var(--fg2); line-height: 1.45; }
+.stk-status-go {
+  flex-shrink: 0;
+  display: inline-flex; align-items: center; gap: 4px;
+  font-size: 12.5px; font-weight: 700; color: var(--terracotta-700);
+}
+.stk-status-go .iconify { width: 15px; height: 15px; transition: transform var(--dur) var(--ease-standard); }
+.stk-status.alert:hover .stk-status-go .iconify { transform: translateX(3px); }
+@media (max-width: 560px) {
+  .stk-status-go { display: none; }
+  .stk-status-num { font-size: 28px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .stk-status, .stk-status::after, .stk-status-go .iconify { transition: none; }
+}
+
+/* ── Zonas de acción etiquetadas (claridad / agrupación) ── */
+.stk-zone { margin-bottom: 22px; }
+.stk-zone-label {
+  margin: 0 0 10px;
+  font-size: 11px; font-weight: 700; letter-spacing: 0.08em;
+  text-transform: uppercase; color: var(--fg3);
+}
+.stk-zone-grid {
+  display: grid; gap: 10px;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
 }
 @media (min-width: 640px) {
-  .stk-action-grid { grid-template-columns: repeat(4, 1fr); }
+  .stk-zone-grid { grid-template-columns: 1.4fr 1fr 1fr; }
+  .stk-zone-grid--3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 }
+
 .stk-action {
-  position: relative;
+  position: relative; min-width: 0;
   background: var(--pure-white);
   border: 1px solid var(--border-subtle);
-  border-radius: 14px;
-  padding: 14px;
-  display: flex; flex-direction: column;
-  min-height: 108px;
-  text-decoration: none;
-  transition: background var(--dur) var(--ease-standard), border-color var(--dur) var(--ease-standard), transform 80ms;
+  border-radius: 14px; padding: 14px;
+  display: flex; flex-direction: column; min-height: 104px;
+  text-decoration: none; overflow: hidden;
+  transition: background var(--dur) var(--ease-standard),
+              border-color var(--dur) var(--ease-standard), transform 80ms;
 }
 .stk-action:active { transform: scale(0.98); }
-.stk-action:hover { background: var(--crema-100); border-color: var(--border); }
-.stk-action.featured {
-  background: linear-gradient(150deg, var(--crema-50) 0%, var(--crema-200) 100%);
-  border-color: var(--terracotta-100);
+.stk-action:hover { background: var(--crema-50); border-color: var(--border); }
+.stk-action:focus-visible { outline: 2px solid var(--terracotta); outline-offset: 2px; }
+
+/* Corner-accent (técnica uiverse reskineada) que crece en hover. */
+.stk-action::after {
+  content: ''; position: absolute; top: 12px; right: 12px;
+  width: 8px; height: 8px;
+  border-top: 1.5px solid var(--border-strong);
+  border-right: 1.5px solid var(--border-strong);
+  opacity: 0.45;
+  transition: width var(--dur) var(--ease-standard),
+              height var(--dur) var(--ease-standard),
+              opacity var(--dur) var(--ease-standard);
 }
-.stk-action-arrow { position: absolute; top: 12px; right: 12px; color: var(--fg3); }
-.stk-action-arrow .iconify { width: 14px; height: 14px; }
+.stk-action:hover::after { width: 13px; height: 13px; opacity: 1; border-color: var(--terracotta); }
+
 .stk-action-ico {
-  position: relative;
-  width: 36px; height: 36px; border-radius: 10px;
-  display: inline-flex; align-items: center; justify-content: center;
-  margin-bottom: auto;
+  width: 32px; height: 32px; display: inline-flex;
+  align-items: center; justify-content: center;
+  margin-bottom: auto; color: var(--espresso-600);
 }
-.stk-action-ico .iconify { width: 18px; height: 18px; }
-.stk-action-ico.pos { background: var(--crema-200); color: var(--terracotta-700); }
-.stk-action-ico.brand { background: var(--terracotta); color: var(--crema-100); }
-.stk-action-ico.info { background: var(--info-bg); color: var(--info); }
-.stk-action-ico.neutral { background: var(--crema-200); color: var(--fg2); }
-.stk-action-ico .spark {
-  position: absolute; top: -6px; right: -6px;
-  color: var(--mostaza);
-}
-.stk-action-ico .spark .iconify { width: 12px; height: 12px; }
+.stk-action-ico .iconify { width: 22px; height: 22px; stroke-width: 1.6; }
+.stk-action.danger .stk-action-ico { color: var(--danger); }
+.stk-action.danger:hover::after { border-color: var(--danger); }
+
 .stk-action-label { margin-top: 12px; font-size: 13.5px; font-weight: 600; color: var(--fg1); }
-.stk-action-sub { font-size: 11.5px; color: var(--fg3); margin-top: 2px; }
+.stk-action-sub { font-size: 11.5px; color: var(--fg3); margin-top: 3px; line-height: 1.35; }
 .stk-action-sub.strong { color: var(--fg1); font-weight: 600; }
-.stk-action-sub.brand-strong { color: var(--terracotta-700); font-weight: 600; }
+
+/* ── PRIMARIA (Von Restorff): más grande, glow cálido, badge ── */
+.stk-action--primary {
+  flex-direction: row; align-items: flex-start; gap: 12px;
+  background: linear-gradient(150deg, var(--crema-50) 0%, var(--terracotta-100) 135%);
+  border-color: var(--terracotta-100);
+  box-shadow: 0 8px 24px -16px rgba(201, 106, 67, 0.55);
+}
+.stk-action--primary:hover { background: linear-gradient(150deg, var(--crema-100) 0%, var(--terracotta-100) 135%); }
+.stk-action--primary .stk-action-ico { color: var(--terracotta-700); margin-bottom: 0; }
+.stk-action--primary .stk-action-body { display: flex; flex-direction: column; min-width: 0; }
+.stk-action--primary .stk-action-label { margin-top: 0; font-size: 15px; }
+.stk-action--primary .stk-action-sub { color: var(--espresso-600); }
+.stk-action-badge {
+  position: absolute; top: 12px; right: 12px;
+  font-size: 9.5px; font-weight: 700; letter-spacing: 0.03em;
+  text-transform: uppercase;
+  background: var(--terracotta); color: var(--crema-100);
+  padding: 3px 7px; border-radius: 999px;
+}
+.stk-action--primary::after { display: none; }
+
+@media (max-width: 639px) {
+  .stk-action--primary { grid-column: 1 / -1; }
+}
 
 .stk-section { margin-bottom: 20px; }
 .stk-section-head {
@@ -610,8 +719,28 @@ async function onImportFile(e: Event): Promise<void> {
 
 .stk-inv-title {
   font-size: 15px; font-weight: 600; color: var(--fg1);
-  margin: 0 0 10px;
+  margin: 0 0 4px;
 }
+.stk-inv-hint { margin: 0 0 12px; font-size: 12px; color: var(--fg3); }
+
+/* ── Aside "Qué hacer ahora": pendientes accionables (no números repetidos) ── */
+.stk-todo { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.stk-todo-item {
+  display: flex; align-items: center; gap: 9px;
+  padding: 10px 0; border-top: 1px solid var(--border-subtle);
+  font-size: 13px; color: var(--fg1);
+}
+.stk-todo-item:first-child { border-top: none; }
+.stk-todo-item a, .stk-todo-item button {
+  color: inherit; text-decoration: none; background: none; border: none;
+  font: inherit; cursor: pointer; text-align: left; padding: 0;
+}
+.stk-todo-item a:hover, .stk-todo-item button:hover { color: var(--terracotta-700); }
+.stk-todo-item .iconify { width: 16px; height: 16px; flex-shrink: 0; }
+.stk-todo-item.danger .iconify { color: var(--danger); }
+.stk-todo-item.warn .iconify { color: var(--mostaza-700); }
+.stk-todo-item.info .iconify { color: var(--espresso-400); }
+.stk-todo-item.ok .iconify { color: var(--oliva-700); }
 .stk-chip-rail {
   display: flex; gap: 6px;
   overflow-x: auto;
