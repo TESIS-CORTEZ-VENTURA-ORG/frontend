@@ -134,49 +134,27 @@ function pickSort(id: SortId): void {
 
 <template>
   <div class="rcp-page">
-    <ClientOnly>
-      <Teleport to="#topbar-actions">
-        <NuxtLink to="/app/recetas/nueva" class="rcp-new" aria-label="Crear nueva receta">
-          <UIcon name="i-lucide-plus" /> Nueva
-        </NuxtLink>
-      </Teleport>
-    </ClientOnly>
-
-    <!-- ============ Resumen ============ -->
-    <div class="rcp-summary" aria-label="Resumen">
-      <div>
-        <div class="rcp-sum-label">Platos</div>
-        <div class="rcp-sum-val">{{ dishes.length }}</div>
+    <!-- Toolbar full-bleed: búsqueda + acción principal (estructura POS) -->
+    <div class="scr-toolbar">
+      <div class="rcp-search">
+        <UIcon name="i-lucide-search" />
+        <input
+          v-model="query"
+          type="search"
+          placeholder="Buscar plato o categoría…"
+          aria-label="Buscar recetas"
+        >
+        <button v-if="query" class="clear" aria-label="Limpiar búsqueda" @click="query = ''">
+          <UIcon name="i-lucide-x" />
+        </button>
       </div>
-      <div class="div" />
-      <div>
-        <div class="rcp-sum-label">Margen prom.</div>
-        <div class="rcp-sum-val" :class="{ success: avgMargin >= 30 }">
-          {{ avgMargin }}<span class="unit">%</span>
-        </div>
-      </div>
-      <div class="div" />
-      <div>
-        <div class="rcp-sum-label">En riesgo</div>
-        <div class="rcp-sum-val" :class="{ danger: lowMarginCount > 0 }">
-          {{ lowMarginCount }}<span class="unit">{{ lowMarginCount === 1 ? 'plato' : 'platos' }}</span>
-        </div>
-      </div>
+      <NuxtLink to="/app/recetas/nueva" class="rcp-new" aria-label="Crear nueva receta">
+        <UIcon name="i-lucide-plus" /> Nueva
+      </NuxtLink>
     </div>
 
-    <!-- ============ Búsqueda ============ -->
-    <div class="rcp-search">
-      <UIcon name="i-lucide-search" />
-      <input
-        v-model="query"
-        type="search"
-        placeholder="Buscar plato o categoría…"
-        aria-label="Buscar recetas"
-      >
-      <button v-if="query" class="clear" aria-label="Limpiar búsqueda" @click="query = ''">
-        <UIcon name="i-lucide-x" />
-      </button>
-    </div>
+    <div class="scr-body">
+      <div class="scr-main">
 
     <!-- ============ Filtros ============ -->
     <div class="rcp-chip-rail" role="tablist" aria-label="Filtros de recetas">
@@ -285,6 +263,27 @@ function pickSort(id: SortId): void {
         <UIcon name="i-lucide-plus" /> Crear receta
       </NuxtLink>
     </div>
+      </div>
+
+      <aside class="scr-aside">
+        <section class="scr-panel">
+          <header class="scr-panel-head">
+            <span class="scr-eyebrow">Resumen</span>
+            <h3 class="scr-panel-title">{{ dishes.length }}<span class="scr-of"> platos</span></h3>
+          </header>
+          <dl class="scr-stats">
+            <div class="scr-stat">
+              <dt>Margen promedio</dt>
+              <dd :class="{ success: avgMargin >= 30 }">{{ avgMargin }}<span class="u">%</span></dd>
+            </div>
+            <div class="scr-stat">
+              <dt>En riesgo</dt>
+              <dd :class="{ danger: lowMarginCount > 0 }">{{ lowMarginCount }}<span class="u">{{ lowMarginCount === 1 ? 'plato' : 'platos' }}</span></dd>
+            </div>
+          </dl>
+        </section>
+      </aside>
+    </div>
 
     <!-- ============ Sheet: ordenar ============ -->
     <UiBottomSheet v-model="showSort" title="Ordenar por">
@@ -309,14 +308,52 @@ function pickSort(id: SortId): void {
 </template>
 
 <style scoped>
-.rcp-page {
-  max-width: 640px;
-  margin: 0 auto;
-  padding-top: calc(12px + env(safe-area-inset-top, 0px));
+.rcp-page { padding-top: 0; }
+
+/* ===== Shell de layout — estructura POS reutilizable (.scr-*) ===== */
+.scr-toolbar {
+  display: flex; align-items: center; gap: 8px;
+  width: 100%; padding: 9px 20px; box-sizing: border-box;
+  background: var(--pure-white);
+  border-bottom: 1px solid var(--border-subtle);
+  margin-bottom: 16px;
 }
-@media (min-width: 1024px) {
-  .rcp-page { padding-top: 32px; }
+.scr-toolbar .rcp-search { flex: 1; min-width: 0; margin: 0; }
+.scr-toolbar .rcp-new { margin-left: auto; flex-shrink: 0; }
+@media (min-width: 640px) {
+  .scr-toolbar .rcp-search { flex: 0 0 360px; }
 }
+.scr-body { display: flex; align-items: flex-start; gap: 18px; padding: 0 20px 28px; }
+.scr-main { flex: 1; min-width: 0; }
+.scr-aside { width: 320px; flex-shrink: 0; position: sticky; top: 16px; }
+@media (max-width: 1023px) {
+  .scr-body { flex-direction: column; gap: 14px; padding: 0 16px 24px; }
+  .scr-aside { width: 100%; position: static; order: -1; }
+}
+
+.scr-panel {
+  padding: 16px; border-radius: 16px;
+  background:
+    radial-gradient(120% 80% at 100% 0%, rgba(201, 106, 67, 0.08), transparent 54%),
+    linear-gradient(180deg, var(--pure-white) 0%, var(--crema-50) 100%);
+  border: 1px solid var(--border-subtle);
+  box-shadow:
+    0 1px 2px rgba(26, 26, 26, 0.04),
+    0 14px 28px -18px rgba(201, 106, 67, 0.28),
+    0 20px 40px -26px rgba(26, 26, 26, 0.18);
+}
+.scr-panel-head { display: flex; flex-direction: column; gap: 3px; margin-bottom: 12px; }
+.scr-eyebrow { font-size: 10px; font-weight: 700; letter-spacing: 0.09em; text-transform: uppercase; color: var(--fg3); }
+.scr-panel-title { margin: 0; font-family: var(--font-serif); font-size: 21px; font-weight: 600; color: var(--fg1); letter-spacing: -0.01em; line-height: 1.05; }
+.scr-of { color: var(--fg3); font-weight: 500; font-size: 0.66em; }
+.scr-stats { margin: 0; display: flex; flex-direction: column; }
+.scr-stat { display: flex; align-items: center; justify-content: space-between; padding: 9px 0; border-top: 1px solid var(--border-subtle); }
+.scr-stat:first-child { border-top: none; }
+.scr-stat dt { font-size: 12.5px; font-weight: 500; color: var(--fg2); }
+.scr-stat dd { margin: 0; font-family: var(--font-serif); font-size: 19px; font-weight: 600; color: var(--fg1); font-variant-numeric: tabular-nums; }
+.scr-stat dd .u { font-size: 0.6em; color: var(--fg3); margin-left: 2px; font-weight: 500; }
+.scr-stat dd.success { color: var(--oliva-700); }
+.scr-stat dd.danger { color: var(--danger); }
 
 /* ============ HEADER ============ */
 /* .rcp-back → .icon-btn global (components.css) */
@@ -737,4 +774,24 @@ function pickSort(id: SortId): void {
 }
 .sort-opt.active .opt-label { color: var(--terracotta-700); font-weight: 600; }
 .sort-opt .opt-ico { width: 16px; height: 16px; color: var(--fg3); flex-shrink: 0; }
+
+/* ===== Fixes de responsividad (auditoría) ===== */
+/* P0: el gutter horizontal ahora lo da .scr-body; anular insets legacy de los
+   bloques internos para que no se dupliquen y desborden en mobile. */
+.scr-main .rcp-chip-rail,
+.scr-main .rcp-cat-rail,
+.scr-main .rcp-list { padding-left: 0; padding-right: 0; }
+.scr-main .rcp-sort { margin-left: 0; margin-right: 0; }
+.scr-main .rcp-empty { margin-left: 0; margin-right: 0; }
+.rcp-chip-rail { max-width: 100%; }
+
+/* P1: el grid 2-col va DESPUÉS de la base .rcp-list para ganar por orden de fuente. */
+@media (min-width: 1366px) {
+  .rcp-list {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+    align-content: start;
+  }
+}
 </style>
